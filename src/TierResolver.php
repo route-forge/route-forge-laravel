@@ -7,8 +7,10 @@ namespace RouteForge\Laravel;
 use Closure;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Arr;
+use RouteForge\Laravel\Exceptions\RouteMissingNameException;
 use RouteForge\Laravel\Exceptions\RouteTierNotAssignedException;
 use RouteForge\Laravel\Exceptions\ClassifierException;
+use RouteForge\Laravel\Exceptions\UnknownClassifierTierException;
 use Throwable;
 
 /**
@@ -34,13 +36,27 @@ readonly class TierResolver
     /**
      * 解析一条路由的最终层级。
      *
-     * @throws RouteTierNotAssignedException 当 strict_mode=true 且未命中任何层级
-     * @throws ClassifierException 当 classifier 回调抛错
+     * @throws RouteMissingNameException        当 strict_mode=true 且路由设置了 tier 但没有路由名
+     * @throws RouteTierNotAssignedException    当 strict_mode=true 且未命中任何层级
+     * @throws ClassifierException              当 classifier 回调抛错
+     * @throws UnknownClassifierTierException   当 classifier 返回的层级名不在 levels 配置中
      */
     public function resolve(Route $route): ?string
     {
-        // 1 & 2：显式 ->tier() 与 group tier 透传（最终都写入 action['tier']）
+        // 前置检查：有 tier 无 name 在严格模式下是配置错误
         $explicit = Arr::get($route->getAction(), 'tier');
+        if (is_string($explicit) && $explicit !== '' && $route->getName() === null) {
+            if ($this->strictMode) {
+                throw new RouteMissingNameException(
+                    'Route (' . $route->uri() . ') has tier [' . $explicit . '] but no route name assigned. '
+                    . 'Route Forge requires a route name when tier is set.'
+                );
+            }
+            // 非严格模式：有 tier 无 name 的路由无法被纳入元信息，直接返回 null
+            return null;
+        }
+    
+        // 1 & 2：显式 ->tier() 与 group tier 透传（最终都写入 action['tier']）
         if (is_string($explicit) && $explicit !== '') {
             return $explicit;
         }
@@ -50,8 +66,18 @@ readonly class TierResolver
             try {
                 $result = call_user_func($this->classifier, $route);
                 if (is_string($result) && $result !== '') {
+                    // 验证 classifier 返回的层级名必须在 levels 配置中
+                    if (!isset($this->levelsConfig[$result])) {
+                        throw new UnknownClassifierTierException(
+                            'Classifier returned unknown tier [' . $result . '] for route '
+                            . ($route->getName() ?? '(' . $route->uri() . ')')
+                            . '. Available tiers: ' . implode(', ', array_keys($this->levelsConfig))
+                        );
+                    }
                     return $result;
                 }
+            } catch (UnknownClassifierTierException $e) {
+                throw $e;
             } catch (Throwable $e) {
                 throw new ClassifierException(
                     'Classifier callback threw: ' . $e->getMessage(),

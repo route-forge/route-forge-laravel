@@ -113,7 +113,8 @@ return [
 - 全部未命中：`strict_mode=true` 抛 `RouteTierNotAssignedException`；`strict_mode=false` 时，若 `fallback_level` 非 null
   则归入该层级，若为 null 则归入「未分配」分组。
 - `classifier` 回调优先级介于「显式 `->tier()` / `Route::group` tier」与「配置 match」之间（完整五级优先级见
-  §3.1.4），用于实现复杂自定义分类逻辑（如基于 Controller 命名空间归类）。
+  §3.1.4），用于实现复杂自定义分类逻辑（如基于 Controller 命名空间归类）。返回的层级名必须在 `levels` 配置中存在，
+  否则抛 `UnknownClassifierTierException`（无论 `strict_mode` 是否开启）。
 
 ##### 中间件匹配模式（`middleware_match`）
 
@@ -430,18 +431,20 @@ php artisan route:forge:clear --level=admin
 | `cache_driver`                         | `string\|null`               | `null`             | 缓存驱动；`null` 用默认驱动，可指定 `redis`/`file`/`array` 等                                                                                                          |
 | `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 fallback/unassigned（false）                                                                                                |
 | `fallback_level`                       | `string\|null`               | `null`             | 兜底层级名；`null` 时未命中路由归入「未分配」分组（可通过摘要端点 §3.1.6 获取）；非 null 则归入指定层级                                                                |
-| `classifier`                           | `callable\|null`             | `null`             | 自定义分类回调，签名 `fn(Route $r): ?string`，返回层级名或 null                                                                                                        |
+| `classifier`                           | `callable\|null`             | `null`             | 自定义分类回调，签名 `fn(Route $r): ?string`，返回层级名或 null。返回的层级名必须在 `levels` 配置中存在，否则抛 `UnknownClassifierTierException` |
 
 ## 6. 错误码
 
 所有 Route Forge 抛出的异常都继承自 `ForgeExceptionContract`，附带 `code`、`route`、`level`、`context` 字段，便于调用方 catch 后统一处理。
 
-| 错误类                          | code        | 触发场景                                | HTTP 状态 |
-|---------------------------------|-------------|-----------------------------------------|-----------|
-| `RouteTierNotAssignedException` | `RF_BE_001` | `strict_mode=true` 且路由未命中任何层级 | 500       |
-| `UnknownLevelException`         | `RF_BE_002` | 请求的层级名不在 `levels` 配置中        | 404       |
-| `CacheDriverException`          | `RF_BE_003` | 指定的 `cache_driver` 不可用            | 500       |
-| `ClassifierException`           | `RF_BE_004` | `classifier` 回调抛错                   | 500       |
+| 错误类                            | code        | 触发场景                                          | HTTP 状态 |
+|-----------------------------------|-------------|---------------------------------------------------|----------|
+| `RouteTierNotAssignedException`   | `RF_BE_001` | `strict_mode=true` 且路由未命中任何层级           | 500      |
+| `UnknownLevelException`           | `RF_BE_002` | 请求的层级名不在 `levels` 配置中                  | 404      |
+| `CacheDriverException`            | `RF_BE_003` | 指定的 `cache_driver` 不可用                      | 500      |
+| `ClassifierException`             | `RF_BE_004` | `classifier` 回调抛错                             | 500      |
+| `RouteMissingNameException`       | `RF_BE_005` | `strict_mode=true` 且路由设置了 tier 但没有路由名 | 500      |
+| `UnknownClassifierTierException`  | `RF_BE_006` | `classifier` 返回的层级名不在 `levels` 配置中     | 500      |
 
 ## 7. 测试矩阵
 

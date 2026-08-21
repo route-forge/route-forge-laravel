@@ -6,6 +6,8 @@ namespace RouteForge\Laravel\Tests\Unit;
 
 use Illuminate\Routing\Route;
 use PHPUnit\Framework\TestCase;
+use RouteForge\Laravel\Exceptions\RouteMissingNameException;
+use RouteForge\Laravel\Exceptions\UnknownClassifierTierException;
 use RouteForge\Laravel\TierResolver;
 
 /**
@@ -26,6 +28,19 @@ class TierResolverTest extends TestCase
         $route->method('gatherMiddleware')->willReturn($middlewares);
         $route->method('getAction')->willReturn($action);
         $route->method('getName')->willReturn('test.route');
+        return $route;
+    }
+
+    /**
+     * 构造一个未命名路由桩（getName 返回 null）。
+     */
+    private function makeUnnamedRoute(string $uri, array $middlewares, array $action = []): Route
+    {
+        $route = $this->createStub(Route::class);
+        $route->method('uri')->willReturn($uri);
+        $route->method('gatherMiddleware')->willReturn($middlewares);
+        $route->method('getAction')->willReturn($action);
+        $route->method('getName')->willReturn(null);
         return $route;
     }
 
@@ -210,5 +225,82 @@ class TierResolverTest extends TestCase
 
         // 空 match 不应全量命中；非 strict、无 fallback → null
         $this->assertNull($resolver->resolve($this->makeRoute('/anything', ['any.mw'])));
+    }
+
+    // ---------------------------------------------------------------------
+    // 有 tier 无 name 的前置检查
+    // ---------------------------------------------------------------------
+
+    public function test_strict_mode_throws_when_tier_set_but_no_name(): void
+    {
+        $resolver = new TierResolver([], null, strictMode: true);
+
+        $route = $this->makeUnnamedRoute('/admin/users', [], ['tier' => 'admin']);
+
+        $this->expectException(RouteMissingNameException::class);
+        $resolver->resolve($route);
+    }
+
+    public function test_non_strict_mode_returns_null_when_tier_set_but_no_name(): void
+    {
+        $resolver = new TierResolver([], null, strictMode: false);
+
+        $route = $this->makeUnnamedRoute('/admin/users', [], ['tier' => 'admin']);
+
+        $this->assertNull($resolver->resolve($route));
+    }
+
+    public function test_no_tier_no_name_does_not_throw(): void
+    {
+        // 没有 tier 也没有 name，不应触发 RouteMissingNameException
+        // 非严格模式下应正常返回 null
+        $resolver = new TierResolver([], null, strictMode: true);
+
+        $route = $this->makeUnnamedRoute('/some/uri', [], []);
+
+        // 无 tier 无 name 在 strict 模式下走的是 RouteTierNotAssignedException 路径
+        // 但前提是没有命中任何层级——这里空配置，所以会走兖底逻辑
+        // strict_mode=true 且无 fallback → 抛 RouteTierNotAssignedException
+        $this->expectException(\RouteForge\Laravel\Exceptions\RouteTierNotAssignedException::class);
+        $resolver->resolve($route);
+    }
+
+    // ---------------------------------------------------------------------
+    // classifier 返回未知层级名验证
+    // ---------------------------------------------------------------------
+
+    public function test_classifier_returns_unknown_tier_throws_exception(): void
+    {
+        $levels = ['admin' => ['match' => []], 'public' => ['match' => []]];
+        $classifier = fn($route) => 'nonexistent_tier';
+        $resolver = new TierResolver($levels, $classifier);
+
+        $route = $this->makeRoute('/test', [], []);
+
+        $this->expectException(UnknownClassifierTierException::class);
+        $resolver->resolve($route);
+    }
+
+    public function test_classifier_returns_valid_tier_works(): void
+    {
+        $levels = ['admin' => ['match' => []], 'public' => ['match' => []]];
+        $classifier = fn($route) => 'admin';
+        $resolver = new TierResolver($levels, $classifier);
+
+        $route = $this->makeRoute('/test', [], []);
+
+        $this->assertSame('admin', $resolver->resolve($route));
+    }
+
+    public function test_classifier_returns_null_falls_through(): void
+    {
+        $levels = ['admin' => ['match' => ['prefix' => ['admin']]]];
+        $classifier = fn($route) => null;
+        $resolver = new TierResolver($levels, $classifier);
+
+        $route = $this->makeRoute('admin/users', [], []);
+
+        // classifier 返回 null，继续走配置 match 规则
+        $this->assertSame('admin', $resolver->resolve($route));
     }
 }

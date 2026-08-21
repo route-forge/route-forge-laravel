@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace RouteForge\Laravel\Tests\Unit;
 
 use PHPUnit\Framework\TestCase;
+use RouteForge\Laravel\Exceptions\RouteMissingNameException;
 use RouteForge\Laravel\Exceptions\RouteTierNotAssignedException;
+use RouteForge\Laravel\Exceptions\UnknownClassifierTierException;
 use RouteForge\Laravel\Exceptions\UnknownLevelException;
 use RouteForge\Laravel\Exceptions\CacheDriverException;
 use RouteForge\Laravel\Exceptions\ClassifierException;
@@ -21,6 +23,8 @@ class ExceptionsTest extends TestCase
         $this->assertSame('RF_BE_002', (new UnknownLevelException())->code());
         $this->assertSame('RF_BE_003', (new CacheDriverException())->code());
         $this->assertSame('RF_BE_004', (new ClassifierException())->code());
+        $this->assertSame('RF_BE_005', (new RouteMissingNameException())->code());
+        $this->assertSame('RF_BE_006', (new UnknownClassifierTierException())->code());
     }
 
     public function test_http_statuses(): void
@@ -29,5 +33,7 @@ class ExceptionsTest extends TestCase
         $this->assertSame(404, (new UnknownLevelException())->httpStatus());
         $this->assertSame(500, (new CacheDriverException())->httpStatus());
         $this->assertSame(500, (new ClassifierException())->httpStatus());
+        $this->assertSame(500, (new RouteMissingNameException())->httpStatus());
+        $this->assertSame(500, (new UnknownClassifierTierException())->httpStatus());
     }
 }
