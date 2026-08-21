@@ -106,7 +106,7 @@ readonly class RouteRepository
      * 缓存 key：route-forge:summary
      *
      * @return array{
-     *   levels: array<string,array{description:string,load:string,route_count:int}>,
+     *   levels: array<string,array{description:string,load:string,route_count:int,route:array{uri:string,methods:string[]}}>,
      *   config: array{strict_mode:bool,endpoint_prefix:string,cache_ttl:int|null},
      *   unassigned: array<int,array{name:string,uri:string,methods:string[],parameters:string[]}>
      * }
@@ -118,15 +118,20 @@ readonly class RouteRepository
             return $cached;
         }
 
-        // levels 概览：每个层级 description/load/cache + route_count（扫描实际命中数）
+        // levels 概览：每个层级 description/load + route_count + route（端点自描述）
         $levelsSummary    = [];
         $levelRouteCounts = $this->countRoutesPerLevel();
+        $endpointPrefix   = '/' . ltrim(rtrim((string) config('forge.endpoint_prefix', '/_forge/routes'), '/'), '/');
 
         foreach ($this->levelsConfig as $level => $cfg) {
             $levelsSummary[$level] = [
                 'description' => $cfg['description'] ?? '',
                 'load'        => $cfg['load'] ?? 'lazy',
                 'route_count' => $levelRouteCounts[$level] ?? 0,
+                'route'       => [
+                    'uri'     => "{$endpointPrefix}/{$level}",
+                    'methods' => ['GET', 'HEAD'],
+                ],
             ];
         }
 

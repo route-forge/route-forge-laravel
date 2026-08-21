@@ -295,22 +295,38 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
     "public": {
       "description": "公共接口（无需登录）",
       "load": "eager",
-      "route_count": 12
+      "route_count": 12,
+      "route": {
+        "uri": "/_forge/routes/public",
+        "methods": ["GET", "HEAD"]
+      }
     },
     "client": {
       "description": "客户端用户接口",
       "load": "lazy",
-      "route_count": 45
+      "route_count": 45,
+      "route": {
+        "uri": "/_forge/routes/client",
+        "methods": ["GET", "HEAD"]
+      }
     },
     "manage": {
       "description": "运营管理接口",
       "load": "lazy",
-      "route_count": 38
+      "route_count": 38,
+      "route": {
+        "uri": "/_forge/routes/manage",
+        "methods": ["GET", "HEAD"]
+      }
     },
     "admin": {
       "description": "系统管理接口",
       "load": "lazy",
-      "route_count": 27
+      "route_count": 27,
+      "route": {
+        "uri": "/_forge/routes/admin",
+        "methods": ["GET", "HEAD"]
+      }
     }
   },
   "config": {
@@ -334,7 +350,7 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
 
 字段说明：
 
-+ `levels`：各层级摘要。`description` 层级描述、`load` 加载策略（eager/lazy）、`route_count` 该层级路由数量。
++ `levels`：各层级摘要。`description` 层级描述、`load` 加载策略（eager/lazy）、`route_count` 该层级路由数量、`route` 该层级元信息端点的请求信息（`uri` + `methods`），前端可据此直接构造请求获取该层级的全量路由数据。
 + `config`：后端全局配置摘要。前端初始化时读取此字段作为最高优先级配置源（见 §5.3 分级覆盖策略）。当前包含 `strict_mode`、`endpoint_prefix` 和 `cache_ttl`，后续版本可扩展。
 + `unassigned`：当 `fallback_level=null`
   时，所有未分配层级的命名路由列表。包含完整的路由元信息（name/uri/methods/parameters），前端可按需加载和调用。fallback_level

@@ -189,12 +189,19 @@ class EndpointTest extends TestCase
             $this->assertArrayHasKey('parameters', $route);
         }
 
-        // levels 中每个层级应包含 description/load/route_count（不再有 cache）
-        foreach ($payload['levels'] as $levelInfo) {
+        // levels 中每个层级应包含 description/load/route_count/route（端点自描述）
+        foreach ($payload['levels'] as $levelName => $levelInfo) {
             $this->assertArrayHasKey('description', $levelInfo);
             $this->assertArrayHasKey('load', $levelInfo);
             $this->assertArrayHasKey('route_count', $levelInfo);
             $this->assertArrayNotHasKey('cache', $levelInfo);
+
+            // route 字段：该层级元信息端点的请求信息（SPEC §3.1.6）
+            $this->assertArrayHasKey('route', $levelInfo);
+            $this->assertArrayHasKey('uri', $levelInfo['route']);
+            $this->assertArrayHasKey('methods', $levelInfo['route']);
+            $this->assertSame("/_forge/routes/{$levelName}", $levelInfo['route']['uri']);
+            $this->assertSame(['GET', 'HEAD'], $levelInfo['route']['methods']);
         }
 
         // admin 层级 route_count 应为 1（仅 admin.users.index）
