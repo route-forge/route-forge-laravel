@@ -7,12 +7,18 @@ namespace RouteForge\Laravel;
 use Closure;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Routing\Contracts\Router as RouterContract;
+use Illuminate\Routing\Route;
 use Illuminate\Routing\Router as BaseRouter;
 use Illuminate\Support\ServiceProvider;
 use RouteForge\Laravel\Cache\RouteCache;
+use RouteForge\Laravel\Console\RouteForgeClearCommand;
+use RouteForge\Laravel\Console\RouteForgeListCommand;
+use RouteForge\Laravel\Console\RouteForgeTypesCommand;
+use RouteForge\Laravel\Http\RouteMetadataController;
 
 /**
  * Route Forge ServiceProvider。
@@ -53,9 +59,9 @@ class ForgeServiceProvider extends ServiceProvider
 
         // 注册 Artisan 命令（SPEC §3.2）
         $this->commands([
-            \RouteForge\Laravel\Console\RouteForgeListCommand::class,
-            \RouteForge\Laravel\Console\RouteForgeTypesCommand::class,
-            \RouteForge\Laravel\Console\RouteForgeClearCommand::class,
+            RouteForgeListCommand::class,
+            RouteForgeTypesCommand::class,
+            RouteForgeClearCommand::class,
         ]);
     }
 
@@ -160,8 +166,8 @@ class ForgeServiceProvider extends ServiceProvider
      */
     protected function registerTierMacro(): void
     {
-        /** @var \Illuminate\Routing\Route $route */
-        \Illuminate\Routing\Route::macro('tier', function (string $tier): \Illuminate\Routing\Route {
+        /** @var Route $route */
+        Route::macro('tier', function (string $tier): Route {
             $action = $this->getAction();
             $action['tier'] = $tier;
             $this->setAction($action);
@@ -172,6 +178,10 @@ class ForgeServiceProvider extends ServiceProvider
     /**
      * 注册元信息查询端点 GET /{endpoint_prefix}/{level} 与摘要端点 GET /{endpoint_prefix}。
      *
+     * 方案 B：按层级注册独立路由，每个层级可配置自己的 endpoint_middleware。
+     * 未配置 endpoint_middleware 的层级不附加中间件。
+     * 摘要端点受顶层 endpoint_middleware 配置保护。
+     *
      * prefix 规范化：确保前导 /、去除尾部 /，避免双斜杠（默认配置为 '/_forge/routes'
      * 已带前导 /，不可再额外拼接）。
      */
@@ -181,16 +191,38 @@ class ForgeServiceProvider extends ServiceProvider
         // 规范化：确保前导 /，去除尾部 /，避免双斜杠
         $prefix = '/' . ltrim(rtrim($prefix, '/'), '/');
 
-        $this->app['router']->get(
+        $levels = config('forge.levels', []);
+        $router = $this->app['router'];
+
+        // 按层级注册独立路由，每个层级可配置自己的 endpoint_middleware
+        foreach ($levels as $levelName => $levelConfig) {
+            $route = $router->get(
+                "{$prefix}/{$levelName}",
+                [RouteMetadataController::class, 'show']
+            )->defaults('level', $levelName);
+
+            $endpointMiddleware = $levelConfig['endpoint_middleware'] ?? [];
+            if (count($endpointMiddleware) > 0) {
+                $route->middleware($endpointMiddleware);
+            }
+        }
+
+        // 兜底路由：匹配不在 levels 中的层级名，返回 404（RF_BE_002）
+        $router->get(
             "{$prefix}/{level}",
-            [\RouteForge\Laravel\Http\RouteMetadataController::class, 'show']
-        )->name('forge.routes.show');
+            [RouteMetadataController::class, 'show']
+        )->where('level', '.*')->name('forge.routes.show');
 
         // 摘要端点（SPEC §3.1.6）：GET /{prefix}
-        $this->app['router']->get(
+        $summaryRoute = $router->get(
             $prefix,
-            [\RouteForge\Laravel\Http\RouteMetadataController::class, 'index']
+            [RouteMetadataController::class, 'index']
         )->name('forge.routes.index');
+
+        $summaryMiddleware = config('forge.endpoint_middleware', []);
+        if (is_array($summaryMiddleware) && count($summaryMiddleware) > 0) {
+            $summaryRoute->middleware($summaryMiddleware);
+        }
     }
 
     /**
@@ -224,7 +256,7 @@ class ForgeServiceProvider extends ServiceProvider
         }
 
         // 确保 Symfony → Laravel 事件桥接已启用
-        $kernel = $this->app->make(\Illuminate\Contracts\Console\Kernel::class);
+        $kernel = $this->app->make(Kernel::class);
         if (method_exists($kernel, 'rerouteSymfonyCommandEvents')) {
             $kernel->rerouteSymfonyCommandEvents();
         }

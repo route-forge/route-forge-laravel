@@ -26,6 +26,8 @@ return [
     |                          array                    'any'（OR）/ 'all'（AND）/ DNF 数组（见 §3.1.2）
     |   load                   'eager'  'lazy'         是否在摘要端点中标记为「前端应预加载」
     |                          |'lazy'                  前端自动发现时据此决定预加载策略
+    |   endpoint_middleware    string[] []              访问该层级元信息端点时要求的中间件列表，未配置则不限制
+    |                          |null
     |
     */
 
@@ -62,6 +64,7 @@ return [
                 'middleware_match' => 'all',
             ],
             'load' => 'lazy',
+            // 'endpoint_middleware' => ['auth', 'admin'],  // 访问 /_forge/routes/admin 需要 auth + admin
         ],
     ],
 
@@ -75,6 +78,18 @@ return [
     */
 
     'endpoint_prefix' => env('FORGE_ENDPOINT_PREFIX', '/_forge/routes'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | 摘要端点中间件
+    |--------------------------------------------------------------------------
+    |
+    | 访问摘要端点（GET /{endpoint_prefix}）时要求的中间件列表。
+    | null 或空数组 = 不限制访问。
+    |
+    */
+
+    'endpoint_middleware' => [],
 
     /*
     |--------------------------------------------------------------------------

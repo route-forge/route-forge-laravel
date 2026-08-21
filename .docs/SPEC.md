@@ -91,10 +91,12 @@ return [
                 'middleware_match' => 'all',  // 要求同时包含 auth 和 admin
             ],
             'load'  => 'lazy',
+            'endpoint_middleware' => ['auth', 'admin'],  // 访问 /_forge/routes/admin 需要 auth + admin
         ],
     ],
 
     'endpoint_prefix' => '/_forge/routes',  // 路由元信息对外端点前缀
+    'endpoint_middleware' => [],              // 摘要端点中间件，null 或空数组 = 不限制
     'cache_ttl'       => 3600,              // 统一缓存 TTL（秒），null=不缓存
     'cache_driver'    => null,              // null=使用默认缓存驱动
     'strict_mode'     => false,             // 严格模式：未命中层级即抛异常
@@ -257,6 +259,25 @@ GET /_forge/routes/{level}   # 返回该层级下所有命名路由的元信息
 缓存：所有层级端点与摘要端点统一使用 `cache_ttl` 配置项控制 TTL（单位秒，null 不缓存，0 永久缓存）。
 > ⚠ cache_ttl: 0 遵循 Laravel Cache TTL 惯例（永久缓存），非 HTTP Cache-Control: max-age=0 含义。Route Forge 缓存仅通过包内部管理（Cache
 > facade / 配置的 cache_driver），不使用 HTTP 响应头。
+
+##### 端点中间件保护（`endpoint_middleware`）
+
+每个层级可配置 `endpoint_middleware` 字段，控制访问该层级元信息端点时要求的中间件。未配置或为空时不限制访问：
+
+```php
+'admin' => [
+    // ... match / load 配置 ...
+    'endpoint_middleware' => ['auth', 'admin'],  // GET /_forge/routes/admin 需要 auth + admin 中间件
+],
+'public' => [
+    // ... match / load 配置 ...
+    // 未配置 endpoint_middleware → GET /_forge/routes/public 无中间件限制
+],
+```
+
+摘要端点（`GET /_forge/routes`）受顶层 `endpoint_middleware` 配置保护（见 §5）。
+
+实现方式：按层级注册独立路由（方案 B），每个层级路由直接挂载对应的中间件。未配置 `endpoint_middleware` 的层级不附加任何中间件，保持原有行为。
 
 #### 3.1.6 层级摘要端点
 
@@ -432,7 +453,9 @@ php artisan route:forge:clear --level=admin
 | `levels.{name}.match.middleware`       | `string[]`                   | `[]`               | 中间件匹配列表，匹配逻辑受 `middleware_match` 控制                                                                                                                     |
 | `levels.{name}.match.middleware_match` | `string\|array`              | `'any'`            | 中间件匹配模式：`'any'`（OR）/ `'all'`（AND）/ DNF 数组（见 §3.1.2 中间件匹配模式）                                                                                    |
 | `levels.{name}.load`                   | `'eager'\|'lazy'`            | `'lazy'`           | 是否在摘要端点中标记为「前端应预加载」；前端自动发现时据此决定预加载策略                                                                                               |
+| `levels.{name}.endpoint_middleware`    | `string[]\|null`             | `[]`               | 访问该层级元信息端点（`GET /{endpoint_prefix}/{level}`）时要求的中间件列表；未配置或空数组则不限制                                                                         |
 | `endpoint_prefix`                      | `string`                     | `'/_forge/routes'` | 路由元信息对外端点前缀（同时用于层级端点和摘要端点）                                                                                                                   |
+| `endpoint_middleware`                  | `string[]`                   | `[]`               | 摘要端点（`GET /{endpoint_prefix}`）中间件；空数组或 null 不限制                                                                                                     |
 | `cache_ttl`                            | `int\|null`                  | `3600`             | 统一缓存 TTL（秒）；`null` 不缓存，`0` 永久缓存。同时作用于所有层级端点与摘要端点。⚠️ `0` 遵循 Laravel Cache TTL 惯例（永久），非 HTTP `Cache-Control: max-age=0` 含义 |
 | `cache_driver`                         | `string\|null`               | `null`             | 缓存驱动；`null` 用默认驱动，可指定 `redis`/`file`/`array` 等                                                                                                          |
 | `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 fallback/unassigned（false）                                                                                                |
@@ -462,7 +485,7 @@ php artisan route:forge:clear --level=admin
 | Artisan 命令 | `route:forge:types` 生成 d.ts 结构、`--level` 过滤、`--json` 输出、`--out` 写文件                                                 |
 | Artisan 命令 | `route:forge:clear` 全量清除缓存、按层级清除、无效层级名报错                                                                      |
 | 中间件匹配   | `middleware_match` 简单模式（any/all）、高级模式（DNF 数组）、边界情况（空数组、单元素）                                          |
-| 端点响应     | `/_forge/routes/{level}` 返回结构、`/_forge/routes` 摘要端点返回结构、缓存命中、未声明层级 404                                    |
+| 端点响应     | `/_forge/routes/{level}` 返回结构、`/_forge/routes` 摘要端点返回结构、缓存命中、未声明层级 404、层级端点中间件保护、摘要端点中间件保护 |
 | 严格模式     | `strict_mode=true` 未命中抛异常、`false` + `fallback_level=null` 归入 unassigned、`false` + `fallback_level` 非 null 归入指定层级 |
 | Laravel 兼容 | Laravel 11/12/13 三版本矩阵；资源路由、嵌套 group、命名空间                                                                       |
 | 缓存         | `cache_driver` 各驱动（redis/file/array）、TTL 过期、手动失效、`0` 永久缓存、`cache_ttl=null` 不缓存                              |

@@ -88,7 +88,7 @@ class ForgeRouteRegistrar extends BaseRouteRegistrar
     /**
      * 注册路由组：属性在此处被消费（写入 groupStack），标记后委托父类。
      */
-    public function group($callback)
+    public function group($callback): ForgeRouteRegistrar
     {
         $this->attributesConsumed = true;
 
@@ -98,7 +98,7 @@ class ForgeRouteRegistrar extends BaseRouteRegistrar
     /**
      * 注册单条路由（get/post/resource/redirect/view 等均汇聚于此）：属性在此处被消费。
      */
-    public function registerRoute($method, $uri, $action = null)
+    public function registerRoute($method, $uri, $action = null): Route
     {
         $this->attributesConsumed = true;
 

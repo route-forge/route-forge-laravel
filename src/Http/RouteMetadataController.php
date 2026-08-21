@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace RouteForge\Laravel\Http;
 
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use RouteForge\Laravel\Exceptions\ForgeExceptionContract;
 use RouteForge\Laravel\RouteRepository;
@@ -30,7 +29,7 @@ class RouteMetadataController extends Controller
      *   - CacheDriverException (RF_BE_003)          → 500
      *   - ClassifierException (RF_BE_004)            → 500
      */
-    public function show(Request $request, string $level): JsonResponse
+    public function show(string $level): JsonResponse
     {
         try {
             $payload = $this->repository->getRoutesByLevel($level);
@@ -59,7 +58,7 @@ class RouteMetadataController extends Controller
      *   - CacheDriverException (RF_BE_003) → 500
      *   - ClassifierException (RF_BE_004) → 500
      */
-    public function index(Request $request): JsonResponse
+    public function index(): JsonResponse
     {
         try {
             $payload = $this->repository->getSummary();
