@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace RouteForge\Laravel;
 
+use Closure;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Arr;
 use RouteForge\Laravel\Exceptions\RouteTierNotAssignedException;
 use RouteForge\Laravel\Exceptions\ClassifierException;
+use Throwable;
 
 /**
  * 层级分配器：根据 SPEC §3.1.4 的优先级规则，决定一条路由最终归属的层级。
@@ -19,13 +21,13 @@ use RouteForge\Laravel\Exceptions\ClassifierException;
  *   4. 配置 match 规则匹配（prefix / middleware，middleware_match 支持 any/all/DNF；多层级命中取最后一个 = last-wins）
  *   5. fallback_level 兜底（仅 strict_mode=false 时生效）
  */
-class TierResolver
+readonly class TierResolver
 {
     public function __construct(
-        private readonly array $levelsConfig,
-        private readonly ?\Closure $classifier = null,
-        private readonly bool $strictMode = false,
-        private readonly ?string $fallbackLevel = null,
+        private array    $levelsConfig,
+        private ?Closure $classifier = null,
+        private bool     $strictMode = false,
+        private ?string  $fallbackLevel = null,
     ) {
     }
 
@@ -50,7 +52,7 @@ class TierResolver
                 if (is_string($result) && $result !== '') {
                     return $result;
                 }
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 throw new ClassifierException(
                     'Classifier callback threw: ' . $e->getMessage(),
                     previous: $e
@@ -122,11 +124,11 @@ class TierResolver
     /**
      * 中间件匹配模式实现（SPEC §3.1.2 中间件匹配模式）。
      *
-     * @param string[]          $routeMiddlewares 路由实际中间件集合
-     * @param string[]          $middlewares      配置的中间件列表（索引参与 DNF 求值）
-     * @param string|array      $middlewareMatch  'any' | 'all' | DNF 嵌套数组
+     * @param string[]     $routeMiddlewares 路由实际中间件集合
+     * @param string[]     $middlewares      配置的中间件列表（索引参与 DNF 求值）
+     * @param array|string $middlewareMatch  'any' | 'all' | DNF 嵌套数组
      */
-    private function matchMiddleware(array $routeMiddlewares, array $middlewares, $middlewareMatch): bool
+    private function matchMiddleware(array $routeMiddlewares, array $middlewares, array|string $middlewareMatch): bool
     {
         // 简单字符串模式
         if ($middlewareMatch === 'any') {

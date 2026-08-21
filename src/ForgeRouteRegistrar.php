@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace RouteForge\Laravel;
 
+use BackedEnum;
+use Closure;
+use Illuminate\Routing\Route;
 use Illuminate\Routing\RouteRegistrar as BaseRouteRegistrar;
+use UnitEnum;
 
 /**
  * Forge 扩展的 RouteRegistrar：将 `tier` 加入 allowedAttributes 白名单，
@@ -14,31 +18,31 @@ use Illuminate\Routing\RouteRegistrar as BaseRouteRegistrar;
  * 不在白名单的属性会抛出 InvalidArgumentException。
  * 通过继承并扩展白名单，tier 可以像 middleware/prefix 等一样作为链式方法调用。
  *
- * @method \Illuminate\Routing\RouteRegistrar tier(string $tier)
- * @method \Illuminate\Routing\RouteRegistrar as(string $value)
- * @method \Illuminate\Routing\RouteRegistrar middleware(array|string|null $middleware)
- * @method \Illuminate\Routing\RouteRegistrar prefix(string $prefix)
- * @method \Illuminate\Routing\RouteRegistrar domain(\BackedEnum|string $value)
- * @method \Illuminate\Routing\RouteRegistrar name(\BackedEnum|string $value)
- * @method \Illuminate\Routing\RouteRegistrar namespace(string|null $value)
- * @method \Illuminate\Routing\RouteRegistrar controller(string $controller)
- * @method \Illuminate\Routing\RouteRegistrar where(array $where)
- * @method \Illuminate\Routing\RouteRegistrar can(\UnitEnum|string $ability, array|string $models = [])
- * @method \Illuminate\Routing\RouteRegistrar metadata(array $metadata)
- * @method \Illuminate\Routing\RouteRegistrar missing(\Closure $missing)
- * @method \Illuminate\Routing\RouteRegistrar scopeBindings()
- * @method \Illuminate\Routing\RouteRegistrar withoutMiddleware(array|string $middleware)
- * @method \Illuminate\Routing\RouteRegistrar withoutScopedBindings()
- * @method \Illuminate\Routing\RouteRegistrar group(\Closure|array|string $callback)
- * @method \Illuminate\Routing\Route resource(string $name, string $controller, array $options = [])
- * @method \Illuminate\Routing\Route apiResource(string $name, string $controller, array $options = [])
- * @method \Illuminate\Routing\Route get(string $uri, \Closure|array|string|null $action = null)
- * @method \Illuminate\Routing\Route post(string $uri, \Closure|array|string|null $action = null)
- * @method \Illuminate\Routing\Route put(string $uri, \Closure|array|string|null $action = null)
- * @method \Illuminate\Routing\Route patch(string $uri, \Closure|array|string|null $action = null)
- * @method \Illuminate\Routing\Route delete(string $uri, \Closure|array|string|null $action = null)
- * @method \Illuminate\Routing\Route options(string $uri, \Closure|array|string|null $action = null)
- * @method \Illuminate\Routing\Route any(string $uri, \Closure|array|string|null $action = null)
+ * @method BaseRouteRegistrar tier(string $tier)
+ * @method BaseRouteRegistrar as(string $value)
+ * @method BaseRouteRegistrar middleware(array|string|null $middleware)
+ * @method BaseRouteRegistrar prefix(string $prefix)
+ * @method BaseRouteRegistrar domain(BackedEnum|string $value)
+ * @method BaseRouteRegistrar name(BackedEnum|string $value)
+ * @method BaseRouteRegistrar namespace(string|null $value)
+ * @method BaseRouteRegistrar controller(string $controller)
+ * @method BaseRouteRegistrar where(array $where)
+ * @method BaseRouteRegistrar can(UnitEnum|string $ability, array|string $models = [])
+ * @method BaseRouteRegistrar metadata(array $metadata)
+ * @method BaseRouteRegistrar missing(Closure $missing)
+ * @method BaseRouteRegistrar scopeBindings()
+ * @method BaseRouteRegistrar withoutMiddleware(array|string $middleware)
+ * @method BaseRouteRegistrar withoutScopedBindings()
+ * @method BaseRouteRegistrar group(Closure|array|string $callback)
+ * @method Route resource(string $name, string $controller, array $options = [])
+ * @method Route apiResource(string $name, string $controller, array $options = [])
+ * @method Route get(string $uri, Closure|array|string|null $action = null)
+ * @method Route post(string $uri, Closure|array|string|null $action = null)
+ * @method Route put(string $uri, Closure|array|string|null $action = null)
+ * @method Route patch(string $uri, Closure|array|string|null $action = null)
+ * @method Route delete(string $uri, Closure|array|string|null $action = null)
+ * @method Route options(string $uri, Closure|array|string|null $action = null)
+ * @method Route any(string $uri, Closure|array|string|null $action = null)
  */
 class ForgeRouteRegistrar extends BaseRouteRegistrar
 {

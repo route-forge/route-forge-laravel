@@ -28,10 +28,15 @@ class RouteCache
     private const KEYS_INDEX = 'route-forge:_keys';
 
     private readonly ?CacheRepository $store;
+    private readonly bool $debugMode;
 
-    public function __construct(?CacheRepository $store = null)
+    /**
+     * @param bool $debugMode 开发模式下跳过所有缓存读写，确保路由变更即时生效
+     */
+    public function __construct(?CacheRepository $store = null, bool $debugMode = false)
     {
         $this->store = $store;
+        $this->debugMode = $debugMode;
     }
 
     /**
@@ -41,7 +46,7 @@ class RouteCache
      */
     public function get(string $level): ?array
     {
-        if ($this->store === null) {
+        if ($this->store === null || $this->debugMode) {
             return null;
         }
         try {
@@ -60,7 +65,7 @@ class RouteCache
      */
     public function set(string $level, array $payload): void
     {
-        if ($this->store === null) {
+        if ($this->store === null || $this->debugMode) {
             return;
         }
         $ttl = $payload['cache'] ?? null;

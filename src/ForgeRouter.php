@@ -4,8 +4,12 @@ declare(strict_types=1);
 
 namespace RouteForge\Laravel;
 
+use BackedEnum;
+use Closure;
 use Illuminate\Routing\Router as BaseRouter;
+use Illuminate\Routing\RouteRegistrar;
 use Illuminate\Support\Str;
+use UnitEnum;
 
 /**
  * Forge 扩展的 Router：覆盖 updateGroupStack 与 mergeGroupAttributesIntoRoute，
@@ -27,21 +31,21 @@ use Illuminate\Support\Str;
  * 绑定方式：ForgeServiceProvider::register() 中通过 app->singleton('router', ...)
  * 覆盖 Illuminate\Routing\RoutingServiceProvider 的默认绑定。
  *
- * @method \Illuminate\Routing\RouteRegistrar tier(string $tier) 设置路由组 tier，返回 Registrar 支持链式调用
- * @method \Illuminate\Routing\RouteRegistrar as(string $value)
- * @method \Illuminate\Routing\RouteRegistrar middleware(array|string|null $middleware)
- * @method \Illuminate\Routing\RouteRegistrar prefix(string $prefix)
- * @method \Illuminate\Routing\RouteRegistrar domain(\BackedEnum|string $value)
- * @method \Illuminate\Routing\RouteRegistrar name(\BackedEnum|string $value)
- * @method \Illuminate\Routing\RouteRegistrar namespace(string|null $value)
- * @method \Illuminate\Routing\RouteRegistrar controller(string $controller)
- * @method \Illuminate\Routing\RouteRegistrar where(array $where)
- * @method \Illuminate\Routing\RouteRegistrar can(\UnitEnum|string $ability, array|string $models = [])
- * @method \Illuminate\Routing\RouteRegistrar metadata(array $metadata)
- * @method \Illuminate\Routing\RouteRegistrar missing(\Closure $missing)
- * @method \Illuminate\Routing\RouteRegistrar scopeBindings()
- * @method \Illuminate\Routing\RouteRegistrar withoutMiddleware(array|string $middleware)
- * @method \Illuminate\Routing\RouteRegistrar withoutScopedBindings()
+ * @method RouteRegistrar tier(string $tier) 设置路由组 tier，返回 Registrar 支持链式调用
+ * @method RouteRegistrar as(string $value)
+ * @method RouteRegistrar middleware(array|string|null $middleware)
+ * @method RouteRegistrar prefix(string $prefix)
+ * @method RouteRegistrar domain(BackedEnum|string $value)
+ * @method RouteRegistrar name(BackedEnum|string $value)
+ * @method RouteRegistrar namespace(string|null $value)
+ * @method RouteRegistrar controller(string $controller)
+ * @method RouteRegistrar where(array $where)
+ * @method RouteRegistrar can(UnitEnum|string $ability, array|string $models = [])
+ * @method RouteRegistrar metadata(array $metadata)
+ * @method RouteRegistrar missing(Closure $missing)
+ * @method RouteRegistrar scopeBindings()
+ * @method RouteRegistrar withoutMiddleware(array|string $middleware)
+ * @method RouteRegistrar withoutScopedBindings()
  */
 class ForgeRouter extends BaseRouter
 {
@@ -51,7 +55,7 @@ class ForgeRouter extends BaseRouter
      * RouteGroup::merge 用 array_merge_recursive 处理嵌套 string tier，会把它合并成 array。
      * 我们需要确保 tier 始终是 string（取内层 = 最后一个元素），符合「内层覆盖外层」约定。
      */
-    protected function updateGroupStack(array $attributes) // phpcs:ignore
+    protected function updateGroupStack(array $attributes): void // phpcs:ignore
     {
         if ($this->hasGroupStack()) {
             $attributes = $this->mergeWithLastGroup($attributes);
@@ -88,18 +92,18 @@ class ForgeRouter extends BaseRouter
         }
 
         if ($method === 'middleware') {
-            return (new ForgeRouteRegistrar($this))->attribute($method, is_array($parameters[0]) ? $parameters[0] : $parameters);
+            return new ForgeRouteRegistrar($this)->attribute($method, is_array($parameters[0]) ? $parameters[0] : $parameters);
         }
 
         if ($method === 'can') {
-            return (new ForgeRouteRegistrar($this))->attribute($method, [$parameters]);
+            return new ForgeRouteRegistrar($this)->attribute($method, [$parameters]);
         }
 
         if ($method !== 'where' && Str::startsWith($method, 'where')) {
-            return (new ForgeRouteRegistrar($this))->{$method}(...$parameters);
+            return new ForgeRouteRegistrar($this)->{$method}(...$parameters);
         }
 
-        return (new ForgeRouteRegistrar($this))->attribute($method, array_key_exists(0, $parameters) ? $parameters[0] : true);
+        return new ForgeRouteRegistrar($this)->attribute($method, array_key_exists(0, $parameters) ? $parameters[0] : true);
     }
 
     /**
@@ -110,7 +114,7 @@ class ForgeRouter extends BaseRouter
      * 签名说明：父类 Laravel Router::mergeGroupAttributesIntoRoute($route) 无参数类型提示
      * 也无返回类型；PHP 重写规则下子类必须保持一致（不能加返回类型，不能加参数类型）。
      */
-    protected function mergeGroupAttributesIntoRoute($route) // phpcs:ignore
+    protected function mergeGroupAttributesIntoRoute($route): void // phpcs:ignore
     {
         parent::mergeGroupAttributesIntoRoute($route);
 

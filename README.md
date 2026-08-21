@@ -25,7 +25,7 @@ Route Forge 后端提供多种互相兼容的路由层级（tier）分配方式�
 - **五级优先级**：显式 `->tier()` > group 透传 > `classifier` 回调 > 配置 match > fallback/unassigned；
 - **元信息端点** `GET /_forge/routes/{level}`：按层级返回路由元信息（名称 + URI + method + 参数），供前端按需懒加载；
 - **摘要端点** `GET /_forge/routes`：返回所有层级概览、全局配置与未分配路由列表，供前端初始化自动发现；
-- **独立缓存**：按层级独立缓存响应，`cache_driver` 可指定驱动，TTL 按层级配置；
+- **独立缓存**：按层级独立缓存响应，`cache_driver` 可指定驱动，TTL 按层级配置；开发模式（`APP_DEBUG=true`）自动跳过缓存；
 - **Artisan 命令**：`route:forge:list` 查看层级分配结果、`route:forge:types` 生成 TS 类型声明；
 - **严格模式**：`strict_mode=true` 时未命中层级抛 `RouteTierNotAssignedException`。
 
@@ -122,6 +122,10 @@ php artisan route:forge:types
 | `classifier`      | `callable\|null` | `null`             | 自定义分类回调 `fn(Route $r): ?string`      |
 
 完整配置项参考见 [`.docs/SPEC.md` §5.1](./.docs/SPEC.md)。
+
+### 开发模式
+
+当 `APP_DEBUG=true`（Laravel 默认的开发环境配置）时，Route Forge 自动跳过所有缓存读写操作，路由变更即时生效，无需手动清除缓存。生产环境（`APP_DEBUG=false`）下缓存策略按层级 `cache` TTL 正常工作。
 
 ## 开发
 

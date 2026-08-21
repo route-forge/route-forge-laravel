@@ -121,4 +121,21 @@ class RouteCacheTest extends TestCase
         $cache->clear(); // should not throw
         $this->assertTrue(true);
     }
+
+    public function test_debug_mode_skips_set_and_get(): void
+    {
+        $store = new Repository(new ArrayStore());
+        $cache = new RouteCache($store, debugMode: true);
+        $payload = ['level' => 'admin', 'routes' => [], 'cache' => 60];
+        $cache->set('admin', $payload);
+        $this->assertNull($cache->get('admin'));
+    }
+
+    public function test_debug_mode_does_not_throw_on_clear(): void
+    {
+        $store = new Repository(new ArrayStore());
+        $cache = new RouteCache($store, debugMode: true);
+        $cache->clear(); // should not throw
+        $this->assertTrue(true);
+    }
 }

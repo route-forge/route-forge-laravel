@@ -113,13 +113,15 @@ class ForgeServiceProvider extends ServiceProvider
     protected function registerBindings(): void
     {
         // RouteCache：按 forge.cache_driver 选择 store；null 表示用默认 cache.store
+        // 开发模式（app.debug=true）下跳过所有缓存读写，路由变更即时生效
         $this->app->singleton(RouteCache::class, function ($app) {
             /** @var Container $app */
             $driver = $app->make('config')->get('forge.cache_driver');
             $store = $driver === null
                 ? $app->make(CacheRepository::class)
                 : $app->make('cache')->store($driver);
-            return new RouteCache($store);
+            $debugMode = (bool) $app->make('config')->get('app.debug', false);
+            return new RouteCache($store, $debugMode);
         });
 
         // TierResolver：从 forge 配置组装

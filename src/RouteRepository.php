@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace RouteForge\Laravel;
 
-use Illuminate\Routing\Router;
 use Illuminate\Routing\Route;
-use Illuminate\Support\Collection;
+use Illuminate\Routing\Router;
 use RouteForge\Laravel\Cache\RouteCache;
 
 /**
@@ -21,15 +20,14 @@ use RouteForge\Laravel\Cache\RouteCache;
  *     "cache": 3600
  *   }
  */
-class RouteRepository
+readonly class RouteRepository
 {
     public function __construct(
-        private readonly Router $router,
-        private readonly TierResolver $tierResolver,
-        private readonly RouteCache $cache,
-        private readonly array $levelsConfig,
-    ) {
-    }
+        private Router       $router,
+        private TierResolver $tierResolver,
+        private RouteCache   $cache,
+        private array        $levelsConfig,
+    ) {}
 
     /**
      * 取某层级下所有命名路由的元信息（带缓存）。
@@ -43,7 +41,7 @@ class RouteRepository
     public function getRoutesByLevel(string $level): array
     {
         if (!isset($this->levelsConfig[$level])) {
-            throw new Exceptions\UnknownLevelException("Unknown level: {$level}");
+            throw new Exceptions\UnknownLevelException("Unknown level: $level");
         }
 
         $cached = $this->cache->get($level);
@@ -63,16 +61,16 @@ class RouteRepository
                 continue;
             }
             $routes[$name] = [
-                'uri' => $route->uri(),
-                'methods' => $route->methods(),
+                'uri'        => $route->uri(),
+                'methods'    => $route->methods(),
                 'parameters' => $route->parameterNames(),
             ];
         }
 
         $payload = [
-            'level' => $level,
+            'level'  => $level,
             'routes' => $routes,
-            'cache' => $this->levelsConfig[$level]['cache'] ?? null,
+            'cache'  => $this->levelsConfig[$level]['cache'] ?? null,
         ];
 
         $this->cache->set($level, $payload);
@@ -124,30 +122,30 @@ class RouteRepository
         }
 
         // levels 概览：每个层级 description/load/cache + route_count（扫描实际命中数）
-        $levelsSummary = [];
+        $levelsSummary    = [];
         $levelRouteCounts = $this->countRoutesPerLevel();
 
         foreach ($this->levelsConfig as $level => $cfg) {
             $levelsSummary[$level] = [
                 'description' => $cfg['description'] ?? '',
-                'load' => $cfg['load'] ?? 'lazy',
-                'cache' => $cfg['cache'] ?? null,
+                'load'        => $cfg['load'] ?? 'lazy',
+                'cache'       => $cfg['cache'] ?? null,
                 'route_count' => $levelRouteCounts[$level] ?? 0,
             ];
         }
 
         // 全局配置摘要
         $config = [
-            'strict_mode' => config('forge.strict_mode', false),
-            'endpoint_prefix' => (string) config('forge.endpoint_prefix', '/_forge/routes'),
+            'strict_mode'     => config('forge.strict_mode', false),
+            'endpoint_prefix' => (string)config('forge.endpoint_prefix', '/_forge/routes'),
         ];
 
         // unassigned：fallback_level=null 时列出所有未命中层级的命名路由
         $unassigned = $this->getUnassignedRoutes();
 
         $payload = [
-            'levels' => $levelsSummary,
-            'config' => $config,
+            'levels'     => $levelsSummary,
+            'config'     => $config,
             'unassigned' => $unassigned,
         ];
 
@@ -211,9 +209,9 @@ class RouteRepository
             $resolved = $this->tierResolver->resolve($route);
             if ($resolved === null) {
                 $unassigned[] = [
-                    'name' => $name,
-                    'uri' => $route->uri(),
-                    'methods' => $route->methods(),
+                    'name'       => $name,
+                    'uri'        => $route->uri(),
+                    'methods'    => $route->methods(),
                     'parameters' => $route->parameterNames(),
                 ];
             }

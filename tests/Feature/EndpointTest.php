@@ -32,6 +32,12 @@ class EndpointTest extends TestCase
         return [ForgeServiceProvider::class];
     }
 
+    protected function defineEnvironment($app): void
+    {
+        // 测试缓存行为需要关闭 debug 模式（debug=true 时跳过缓存）
+        $app['config']->set('app.debug', false);
+    }
+
     private function endpoint(string $level): string
     {
         return $this->summaryEndpoint() . '/' . $level;
@@ -55,7 +61,8 @@ class EndpointTest extends TestCase
         $response->assertStatus(200);
         $payload = $response->json();
         $this->assertSame('admin', $payload['level']);
-        $this->assertSame(3600, $payload['cache']);
+        // admin 层级未配置 cache TTL，默认为 null（不缓存）
+        $this->assertNull($payload['cache']);
 
         // 路由名带点（'admin.users.index'），不能用 Laravel json() 的 dot-path 访问
         // 直接从 routes 关联数组取条目
@@ -129,25 +136,26 @@ class EndpointTest extends TestCase
     public function test_cache_hit_avoids_rescan(): void
     {
         config()->set('forge.cache_driver', 'array');
-
-        RouteFacade::get('/admin/users', static function () {})
-            ->name('admin.users.index')
-            ->tier('admin');
-
+    
+        // 使用 public 层级（cache=3600）验证缓存命中行为
+        RouteFacade::get('/public/info', static function () {})
+            ->name('public.info')
+            ->tier('public');
+    
         // 首次请求：cache miss → 扫描 → 写入 array 缓存
-        $firstRoutes = $this->get($this->endpoint('admin'))->json('routes');
-        $this->assertArrayHasKey('admin.users.index', $firstRoutes);
-
-        // 在缓存写入之后，再注册一条 admin 层级路由
-        RouteFacade::get('/admin/roles', static function () {})
-            ->name('admin.roles.index')
-            ->tier('admin');
-
+        $firstRoutes = $this->get($this->endpoint('public'))->json('routes');
+        $this->assertArrayHasKey('public.info', $firstRoutes);
+    
+        // 在缓存写之后，再注册一条 public 层级路由
+        RouteFacade::get('/public/help', static function () {})
+            ->name('public.help')
+            ->tier('public');
+    
         // 二次请求：cache hit → 直接返回缓存，不重扫
-        $secondRoutes = $this->get($this->endpoint('admin'))->json('routes');
-
+        $secondRoutes = $this->get($this->endpoint('public'))->json('routes');
+    
         $this->assertSame($firstRoutes, $secondRoutes);
-        $this->assertArrayNotHasKey('admin.roles.index', $secondRoutes);
+        $this->assertArrayNotHasKey('public.help', $secondRoutes);
     }
 
     public function test_summary_endpoint_returns_levels_config_unassigned(): void

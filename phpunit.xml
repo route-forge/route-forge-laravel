@@ -18,5 +18,6 @@
     </testsuites>
     <php>
         <env name="APP_KEY" value="base64:abcdefghijklmnopqrstuvwxyz1234567890="/>
+        <env name="APP_DEBUG" value="false"/>
     </php>
 </phpunit>
