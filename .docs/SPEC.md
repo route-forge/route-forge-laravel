@@ -105,7 +105,7 @@ return [
 
 匹配规则：
 
-- `prefix`：路由 URI 命中任一前缀即归入此层级（支持多个）。
+- `prefix`：路由 URI 命中任意一个前缀即归入此层级（支持多个）。
 - `middleware`：路由中间件集合按 `middleware_match` 规则匹配（详见下方「中间件匹配模式」）。
 - 显式 `->tier()` 标记优先级最高，覆盖配置匹配结果（见 3.1.4）。
 - 多个层级同时命中时，按 `levels` 数组定义顺序取最后一个（后定义覆盖前定义，与 `Route::group`
@@ -389,29 +389,48 @@ declare const routes: {
 - 数据源：直接从 Laravel 路由注册表（`Route::getRoutes()`）读取， **不需要启动 HTTP 服务**，离线可用。
 - 层级分配逻辑与运行时完全一致（遵循 §3.1.4 五级优先级）。
 - 路径参数类型默认 `string | number`（Laravel 路由定义不声明参数类型）。
-- 响应类型默认 `unknown`，由业务侧通过单独的响应类型映射文件补全（避免侵入后端代码）。
+- 响应中body/response类型默认 `unknown`，由业务侧通过单独的响应类型映射补上类型（避免侵入后端代码）。
 - `--level` 过滤时，若层级名不存在则提示可用层级列表。
 - 未分配层级的路由（unassigned）也会生成类型，路由名照常可用，仅不带层级归属。
 
 > 设计意图：路由定义是后端数据，类型必须由后端这个唯一真相源生成——后端改了路由，跑一次命令前端类型即同步，杜绝手写类型与路由表脱节。相比前端
 > CLI 请求端点生成，Artisan 命令离线可用，CI 中 PHP 构建阶段无需 Node 环境。
 
+#### `php artisan route:forge:clear`
+
+清除 Route Forge 路由元信息缓存，支持全量清除或按层级清除：
+
+```bash
+# 清除全部缓存（含摘要端点）
+php artisan route:forge:clear
+# 仅清除指定层级缓存
+php artisan route:forge:clear --level=admin
+```
+
+行为说明：
+
+- 全量清除时通过 `RouteCache::clear()` 基于 keys 索引一次性清空所有 `route-forge:*` 缓存键（含摘要端点 `route-forge:summary`）。
+- `--level` 清除时仅失效指定层级的缓存键，摘要端点缓存不受影响。
+- `--level` 指定的层级名不存在时提示可用层级列表。
+- 开发模式（`APP_DEBUG=true`）下缓存本就不写入，执行此命令无实际效果但不会报错。
+- 联动清除：执行 Laravel 内置的 `php artisan route:clear` 时，自动连带清除 Route Forge 缓存（通过监听 `CommandStarting` 事件实现）。
+
 ## 5. 配置项参考
 
-| 键                                     | 类型                         | 默认值             | 说明                                                                                                                                                                                   |
-|----------------------------------------|------------------------------|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `levels`                               | `array<string, LevelConfig>` | 见 3.1.2           | 层级定义表，键为层级名（自定义），值为该层级的匹配规则与缓存策略                                                                                                                       |
-| `levels.{name}.description`            | `string`                     | `''`               | 层级描述，仅用于文档与调试输出                                                                                                                                                         |
-| `levels.{name}.match.prefix`           | `string[]`                   | `[]`               | URI 前缀匹配列表，命中任一即归入此层级                                                                                                                                                 |
-| `levels.{name}.match.middleware`       | `string[]`                   | `[]`               | 中间件匹配列表，匹配逻辑受 `middleware_match` 控制                                                                                                                                     |
-| `levels.{name}.match.middleware_match` | `string\|array`              | `'any'`            | 中间件匹配模式：`'any'`（OR）/ `'all'`（AND）/ DNF 数组（见 §3.1.2 中间件匹配模式）                                                                                                    |
-| `levels.{name}.load`                   | `'eager'\|'lazy'`            | `'lazy'`           | 是否在摘要端点中标记为「前端应预加载」；前端自动发现时据此决定预加载策略                                                                                                               |
-| `endpoint_prefix`                      | `string`                     | `'/_forge/routes'` | 路由元信息对外端点前缀（同时用于层级端点和摘要端点）                                                                                                                                   |
-| `cache_ttl`                            | `int\|null`                  | `3600`             | 统一缓存 TTL（秒）；`null` 不缓存，`0` 永久缓存。同时作用于所有层级端点与摘要端点。⚠️ `0` 遵循 Laravel Cache TTL 惯例（永久），非 HTTP `Cache-Control: max-age=0` 含义                                                                       |
-| `cache_driver`                         | `string\|null`               | `null`             | 缓存驱动；`null` 用默认驱动，可指定 `redis`/`file`/`array` 等                                                                                                                          |
-| `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 fallback/unassigned（false）                                                                                                                |
-| `fallback_level`                       | `string\|null`               | `null`             | 兜底层级名；`null` 时未命中路由归入「未分配」分组（可通过摘要端点 §3.1.6 获取）；非 null 则归入指定层级                                                                                |
-| `classifier`                           | `callable\|null`             | `null`             | 自定义分类回调，签名 `fn(Route $r): ?string`，返回层级名或 null                                                                                                                        |
+| 键                                     | 类型                         | 默认值             | 说明                                                                                                                                                                   |
+|----------------------------------------|------------------------------|--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `levels`                               | `array<string, LevelConfig>` | 见 3.1.2           | 层级定义表，键为层级名（自定义），值为该层级的匹配规则与缓存策略                                                                                                       |
+| `levels.{name}.description`            | `string`                     | `''`               | 层级描述，仅用于文档与调试输出                                                                                                                                         |
+| `levels.{name}.match.prefix`           | `string[]`                   | `[]`               | URI 前缀匹配列表，命中任一即归入此层级                                                                                                                                 |
+| `levels.{name}.match.middleware`       | `string[]`                   | `[]`               | 中间件匹配列表，匹配逻辑受 `middleware_match` 控制                                                                                                                     |
+| `levels.{name}.match.middleware_match` | `string\|array`              | `'any'`            | 中间件匹配模式：`'any'`（OR）/ `'all'`（AND）/ DNF 数组（见 §3.1.2 中间件匹配模式）                                                                                    |
+| `levels.{name}.load`                   | `'eager'\|'lazy'`            | `'lazy'`           | 是否在摘要端点中标记为「前端应预加载」；前端自动发现时据此决定预加载策略                                                                                               |
+| `endpoint_prefix`                      | `string`                     | `'/_forge/routes'` | 路由元信息对外端点前缀（同时用于层级端点和摘要端点）                                                                                                                   |
+| `cache_ttl`                            | `int\|null`                  | `3600`             | 统一缓存 TTL（秒）；`null` 不缓存，`0` 永久缓存。同时作用于所有层级端点与摘要端点。⚠️ `0` 遵循 Laravel Cache TTL 惯例（永久），非 HTTP `Cache-Control: max-age=0` 含义 |
+| `cache_driver`                         | `string\|null`               | `null`             | 缓存驱动；`null` 用默认驱动，可指定 `redis`/`file`/`array` 等                                                                                                          |
+| `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 fallback/unassigned（false）                                                                                                |
+| `fallback_level`                       | `string\|null`               | `null`             | 兜底层级名；`null` 时未命中路由归入「未分配」分组（可通过摘要端点 §3.1.6 获取）；非 null 则归入指定层级                                                                |
+| `classifier`                           | `callable\|null`             | `null`             | 自定义分类回调，签名 `fn(Route $r): ?string`，返回层级名或 null                                                                                                        |
 
 ## 6. 错误码
 
@@ -431,11 +450,12 @@ declare const routes: {
 | 层级分配     | 显式 `->tier()`、配置 match、`Route::group` 透传、classifier、fallback/unassigned、优先级覆盖、**多层级同时命中取最后一个**       |
 | Artisan 命令 | `route:forge:list` 输出格式（table/json）、按层级过滤、unassigned 路由显示、`--level` 参数过滤                                    |
 | Artisan 命令 | `route:forge:types` 生成 d.ts 结构、`--level` 过滤、`--json` 输出、`--out` 写文件                                                 |
+| Artisan 命令 | `route:forge:clear` 全量清除缓存、按层级清除、无效层级名报错                                                                      |
 | 中间件匹配   | `middleware_match` 简单模式（any/all）、高级模式（DNF 数组）、边界情况（空数组、单元素）                                          |
 | 端点响应     | `/_forge/routes/{level}` 返回结构、`/_forge/routes` 摘要端点返回结构、缓存命中、未声明层级 404                                    |
 | 严格模式     | `strict_mode=true` 未命中抛异常、`false` + `fallback_level=null` 归入 unassigned、`false` + `fallback_level` 非 null 归入指定层级 |
 | Laravel 兼容 | Laravel 11/12/13 三版本矩阵；资源路由、嵌套 group、命名空间                                                                       |
-| 缓存         | `cache_driver` 各驱动（redis/file/array）、TTL 过期、手动失效、`0` 永久缓存、`cache_ttl=null` 不缓存                                                       |
+| 缓存         | `cache_driver` 各驱动（redis/file/array）、TTL 过期、手动失效、`0` 永久缓存、`cache_ttl=null` 不缓存                              |
 
 ## 8. 版本与发布
 
@@ -447,7 +467,7 @@ declare const routes: {
 - ✅ 摘要端点：返回所有层级概览与全局配置，供前端初始化自动发现
 - ✅ `middleware_match`：支持 `any` / `all` / DNF 数组三种匹配模式
 - ✅ 统一缓存：所有层级端点与摘要端点共享同一 TTL 配置，支持多种缓存驱动
-- ✅ Artisan 命令：`route:forge:list` 查看层级分配结果、`route:forge:types` 生成 TS 类型声明
+- ✅ Artisan 命令：`route:forge:list` 查看层级分配结果、`route:forge:types` 生成 TS 类型声明、`route:forge:clear` 清除缓存
 
 ### 8.2 v1.x 路线图
 

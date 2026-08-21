@@ -107,6 +107,10 @@ php artisan route:forge:list
 
 # 生成 TS 类型声明（默认 stdout；--out 写文件；--level / --json 可选）
 php artisan route:forge:types
+
+# 清除路由元信息缓存（--level 仅清除指定层级；不传则清除全部）
+# 执行 Laravel 内置的 php artisan route:clear 时也会自动连带清除
+php artisan route:forge:clear
 ```
 
 ## 主要配置项（config/forge.php）

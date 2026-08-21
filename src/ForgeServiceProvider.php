@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RouteForge\Laravel;
 
 use Closure;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
@@ -23,6 +24,7 @@ use RouteForge\Laravel\Cache\RouteCache;
  *   3. 绑定 RouteCache / TierResolver / RouteRepository 依赖（§3.1.5）
  *   4. 注册元信息查询端点 `GET /_forge/routes/{level}`（§3.1.5）
  *   5. 发布 config/forge.php
+ *   6. 监听 route:clear 命令，自动连带清除 Route Forge 缓存
  *
  * 重绑时机说明：
  *   - register() 在所有 ServiceProvider 的 boot() 之前执行；
@@ -47,11 +49,13 @@ class ForgeServiceProvider extends ServiceProvider
         $this->registerTierMacro();
         $this->registerMetadataEndpoint();
         $this->publishConfig();
+        $this->listenRouteClear();
 
         // 注册 Artisan 命令（SPEC §3.2）
         $this->commands([
             \RouteForge\Laravel\Console\RouteForgeListCommand::class,
             \RouteForge\Laravel\Console\RouteForgeTypesCommand::class,
+            \RouteForge\Laravel\Console\RouteForgeClearCommand::class,
         ]);
     }
 
@@ -199,5 +203,36 @@ class ForgeServiceProvider extends ServiceProvider
                 __DIR__ . '/../config/forge.php' => $this->app->configPath('forge.php'),
             ], 'forge-config');
         }
+    }
+
+    /**
+     * 监听 Laravel 内置 route:clear 命令，执行时自动连带清除 Route Forge 缓存。
+     *
+     * 开发者运行 php artisan route:clear 时，通常意味着路由定义发生了变更，
+     * Route Forge 的路由元信息缓存也应一并失效，避免端点返回过期数据。
+     *
+     * 实现说明：
+     *   Laravel Kernel 的 handle() 方法会调用 rerouteSymfonyCommandEvents()
+     *   将 Symfony Console 事件桥接为 Laravel 事件（CommandStarting 等），
+     *   但 call() 方法（用于 Kernel::call / $this->artisan）不会自动调用。
+     *   因此这里主动调用以确保事件桥接在任何调用方式下都生效。
+     */
+    protected function listenRouteClear(): void
+    {
+        if (! $this->app->runningInConsole()) {
+            return;
+        }
+
+        // 确保 Symfony → Laravel 事件桥接已启用
+        $kernel = $this->app->make(\Illuminate\Contracts\Console\Kernel::class);
+        if (method_exists($kernel, 'rerouteSymfonyCommandEvents')) {
+            $kernel->rerouteSymfonyCommandEvents();
+        }
+
+        $this->app['events']->listen(CommandStarting::class, function (CommandStarting $event) {
+            if ($event->command === 'route:clear') {
+                $this->app->make(RouteCache::class)->clear();
+            }
+        });
     }
 }
