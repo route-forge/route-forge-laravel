@@ -1,9 +1,6 @@
 # Route Forge — 设计思路
 
 > 作者原始思路记录，用于项目演进追溯与决策参考。
->
-> 📦 **仓库范围说明**：本仓库（route-forge-laravel）自 route-forge monorepo 拆分而来，仅承载 Laravel 后端包
-> （route-forge/laravel）。文中涉及 monorepo / 前端包（§6.3 等）的内容为原始设计记录，前端部分仍在原 monorepo 中演进。
 
 ## 1. 缘起
 
@@ -99,35 +96,13 @@ Laravel 路由定义里天然包含 HTTP 方法（GET/POST/PUT/DELETE），没�
 - Route Forge 直接从 Laravel 的 `Route::getRoutes()` 读取，零注解；
 - 未来可作为可选能力（OpenAPI → Route Forge）桥接。
 
-### 6.2 HTTP 客户端适配策略
-
-早期方案考虑过用 `ofetch` 作为默认 HTTP 客户端（API 现代、类型好、体积小），但实际落地时发现三个问题：
-
-1. **存量项目已有 axios**：强制引入第二个 HTTP 库会造成包体积浪费和拦截器配置分裂；
-2. **零依赖新项目**：不想装任何 HTTP 库的轻量项目，`ofetch` 仍然是一个外部依赖；
-3. **统一拦截器行为**：不同 adapter 的拦截器语义不一致，用户切换 adapter 时行为可能变化。
-
-最终方案：
-
-- 默认 `'auto'`：检测到宿主有 axios 就复用（继承其拦截器/默认配置），没有则降级到内置 `@route-forge/builtin-http`（基于原生
-  `fetch`，零外部依赖）；
-- 内置实现刻意对齐 axios 拦截器 API 与执行顺序（请求 LIFO、响应 FIFO），确保两套 adapter 行为一致；
-- 保留自定义 Fetcher 接口，极端场景可完全替换。
-
-### 6.3 为什么 monorepo
-
-- Laravel 包、TS core、Vue 插件三个东西逻辑上是一个项目；
-- 共享 issue / CI / 文档；
-- 业界标准做法（Babel、Vue、Nuxt、Filament 都这样）；
-- pnpm workspace + turborepo 是当下最成熟的方案。
-
-### 6.4 为什么 level 不固定
+### 6.2 为什么 level 不固定
 
 - 不同项目的权限结构差异极大（admin/user/tenant/v1/v2...）；
 - 固定三级会强迫用户适配包的思维；
 - 应该让 level 体系完全可定制，从零配置到深度自定义都支持。
 
-### 6.5 为什么取消 Blade 注入，统一走摘要端点
+### 6.3 为什么取消 Blade 注入，统一走摘要端点
 
 早期考虑过在 Blade 模板中通过 `@forgeConfig` 指令注入后端配置到 HTML 页面，前端初始化时直接读取。但发现：
 
@@ -137,7 +112,7 @@ Laravel 路由定义里天然包含 HTTP 方法（GET/POST/PUT/DELETE），没�
 
 最终决策：取消 Blade 注入，所有后端配置下发均通过摘要端点，前端在 `createRouteForge()` 初始化时按需请求。
 
-### 6.6 为什么类型由后端 Artisan 命令生成
+### 6.4 为什么类型由后端 Artisan 命令生成
 
 早期考虑过由前端 CLI（请求摘要端点）生成 TS 类型，最终改为后端 `route:forge:types` Artisan 命令，理由：
 
@@ -163,8 +138,6 @@ Laravel 路由定义里天然包含 HTTP 方法（GET/POST/PUT/DELETE），没�
 
 ## 9. 个人投入预期
 
-- Phase 1（Laravel MVP：路由分级 + 端点 + Artisan 命令含类型生成）：2-3 周
-- Phase 2（前端包 + Vue 集成）：2 周
-- Phase 3（文档 + 示例 + 发布）：1 周
-- Phase 4（生态：React 版、Vite 插件）：持续
+- Phase 1（Laravel MVP：路由分级 + 端点 + Artisan 命令含类型生成）：2-3 周 ✅ 已完成
+- Phase 2（文档 + 示例 + 发布）：1 周
 - 长期维护：每周约 4 小时
