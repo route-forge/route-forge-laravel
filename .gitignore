@@ -1,0 +1,26 @@
+# Composer 依赖与锁文件（library 包惯例：不提交 lock）
+/vendor/
+composer.phar
+composer.lock
+
+# PHPUnit
+/.phpunit.cache/
+.phpunit.result.cache
+/coverage/
+
+# Node（package.json 仅作脚本桥接，无前端产物）
+/node_modules/
+
+# IDE / 编辑器
+/.idea/
+/.vscode/
+*.swp
+
+# 环境变量与本地配置
+.env
+.env.*
+
+# 操作系统
+.DS_Store
+Thumbs.db
+desktop.ini
