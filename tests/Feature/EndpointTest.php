@@ -159,6 +159,9 @@ class EndpointTest extends TestCase
 
     public function test_summary_endpoint_returns_levels_config_unassigned(): void
     {
+        // 开启 expose_unassigned 以验证 unassigned 路由返回
+        config()->set('forge.expose_unassigned', true);
+
         RouteFacade::get('/admin/users', static function () {})
             ->name('admin.users.index')
             ->tier('admin');
@@ -197,7 +200,7 @@ class EndpointTest extends TestCase
         // admin 层级 route_count 应为 1（仅 admin.users.index）
         $this->assertSame(1, $payload['levels']['admin']['route_count']);
 
-        // orphan 应出现在 unassigned 中（fallback_level=null 默认配置）
+        // orphan 应出现在 unassigned 中（fallback_level=null 且 expose_unassigned=true）
         $unassignedNames = array_column($payload['unassigned'], 'name');
         $this->assertContains('orphan', $unassignedNames);
 
@@ -205,6 +208,34 @@ class EndpointTest extends TestCase
         $this->assertFalse($payload['config']['strict_mode']);
         $this->assertSame('/_forge/routes', $payload['config']['endpoint_prefix']);
         $this->assertSame(3600, $payload['config']['cache_ttl']);
+    }
+
+    public function test_summary_endpoint_unassigned_empty_by_default(): void
+    {
+        // 默认 expose_unassigned=false，unassigned 应返回空数组，避免路由泄露
+        RouteFacade::get('/orphan', static function () {})
+            ->name('orphan');
+
+        $response = $this->get($this->summaryEndpoint());
+
+        $response->assertStatus(200);
+        $payload = $response->json();
+        $this->assertSame([], $payload['unassigned']);
+    }
+
+    public function test_summary_endpoint_unassigned_returned_when_expose_enabled(): void
+    {
+        config()->set('forge.expose_unassigned', true);
+
+        RouteFacade::get('/orphan', static function () {})
+            ->name('orphan');
+
+        $response = $this->get($this->summaryEndpoint());
+
+        $response->assertStatus(200);
+        $payload = $response->json();
+        $unassignedNames = array_column($payload['unassigned'], 'name');
+        $this->assertContains('orphan', $unassignedNames);
     }
 
     public function test_summary_endpoint_unassigned_is_empty_when_fallback_level_set(): void

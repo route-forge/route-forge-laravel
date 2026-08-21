@@ -187,6 +187,11 @@ readonly class RouteRepository
             return [];
         }
 
+        // expose_unassigned=false（默认）时不返回未分配路由，避免增量项目路由泄露
+        if (!config('forge.expose_unassigned', false)) {
+            return [];
+        }
+
         $unassigned = [];
         foreach ($this->router->getRoutes() as $route) {
             $name = $route->getName();
