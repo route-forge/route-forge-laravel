@@ -26,9 +26,6 @@ return [
     |                          array                    'any'（OR）/ 'all'（AND）/ DNF 数组（见 §3.1.2）
     |   load                   'eager'  'lazy'         是否在摘要端点中标记为「前端应预加载」
     |                          |'lazy'                  前端自动发现时据此决定预加载策略
-    |   cache                  int|null null            该层级元信息缓存 TTL（秒）
-    |                                                   null = 不缓存；0 = 永久缓存（Laravel Cache 惯例）
-    |                                                   ⚠ 非 HTTP Cache-Control: max-age=0 含义
     |
     */
 
@@ -40,7 +37,6 @@ return [
                 'middleware' => [],
             ],
             'load'  => 'eager',
-            'cache' => 3600,
         ],
         'client' => [
             'description' => '客户端用户接口',
@@ -79,6 +75,19 @@ return [
     */
 
     'endpoint_prefix' => env('FORGE_ENDPOINT_PREFIX', '/_forge/routes'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | 缓存 TTL（秒）
+    |--------------------------------------------------------------------------
+    |
+    | 统一控制所有层级端点与摘要端点的缓存 TTL。
+    | null = 不缓存（每次实时扫描路由表）；0 = 永久缓存（Laravel Cache 惯例）。
+    | ⚠ 非 HTTP Cache-Control: max-age=0 含义。
+    |
+    */
+
+    'cache_ttl' => env('FORGE_CACHE_TTL', 3600),
 
     /*
     |--------------------------------------------------------------------------

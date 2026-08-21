@@ -10,7 +10,7 @@
 - 五级优先级：显式标注 > 分组继承 > 自定义回调 > 配置匹配 > 兜底/未分配
 - 元信息端点：按层级返回路由元信息（名称 + URI + method + 参数），供前端按需懒加载
 - 摘要端点：返回所有层级概览与全局配置，供前端初始化自动发现
-- 独立缓存：按层级独立缓存响应，支持多种缓存驱动
+- 统一缓存：所有层级端点与摘要端点共享同一 TTL 配置，支持多种缓存驱动
 - Artisan 命令：查看层级分配结果、生成 TS 类型声明文件
 
 ## 2. 目标用户
@@ -66,7 +66,6 @@ return [
                 'middleware' => [],
             ],
             'load'  => 'eager',
-            'cache' => 3600,
         ],
         'client' => [
             'description' => '客户端用户接口',
@@ -96,10 +95,11 @@ return [
     ],
 
     'endpoint_prefix' => '/_forge/routes',  // 路由元信息对外端点前缀
-    'cache_driver'    => null,             // null=使用默认缓存驱动
-    'strict_mode'     => false,            // 严格模式：未命中层级即抛异常
-    'fallback_level'  => null,             // null=未命中路由归入「未分配」分组；非 null 则归入指定层级
-    'classifier'      => null,             // 自定义分类回调，签名 fn(Route $r): ?string
+    'cache_ttl'       => 3600,              // 统一缓存 TTL（秒），null=不缓存
+    'cache_driver'    => null,              // null=使用默认缓存驱动
+    'strict_mode'     => false,             // 严格模式：未命中层级即抛异常
+    'fallback_level'  => null,              // null=未命中路由归入「未分配」分组；非 null 则归入指定层级
+    'classifier'      => null,              // 自定义分类回调，签名 fn(Route $r): ?string
 ];
 ```
 
@@ -247,8 +247,8 @@ GET /_forge/routes/{level}   # 返回该层级下所有命名路由的元信息
 }
 ```
 
-缓存：响应按层级独立缓存（`cache` 配置项控制 TTL，单位秒，null 不缓存，0 永久缓存）。
-> ⚠️ cache: 0 遵循 Laravel Cache TTL 惯例（永久缓存），非 HTTP Cache-Control: max-age=0 含义。Route Forge 缓存仅通过包内部管理（Cache
+缓存：所有层级端点与摘要端点统一使用 `cache_ttl` 配置项控制 TTL（单位秒，null 不缓存，0 永久缓存）。
+> ⚠ cache_ttl: 0 遵循 Laravel Cache TTL 惯例（永久缓存），非 HTTP Cache-Control: max-age=0 含义。Route Forge 缓存仅通过包内部管理（Cache
 > facade / 配置的 cache_driver），不使用 HTTP 响应头。
 
 #### 3.1.6 层级摘要端点
@@ -267,31 +267,28 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
     "public": {
       "description": "公共接口（无需登录）",
       "load": "eager",
-      "cache": 3600,
       "route_count": 12
     },
     "client": {
       "description": "客户端用户接口",
       "load": "lazy",
-      "cache": null,
       "route_count": 45
     },
     "manage": {
       "description": "运营管理接口",
       "load": "lazy",
-      "cache": null,
       "route_count": 38
     },
     "admin": {
       "description": "系统管理接口",
       "load": "lazy",
-      "cache": null,
       "route_count": 27
     }
   },
   "config": {
     "strict_mode": false,
-    "endpoint_prefix": "/_forge/routes"
+    "endpoint_prefix": "/_forge/routes",
+    "cache_ttl": 3600
   },
   "unassigned": [
     {
@@ -305,20 +302,17 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
     }
   ]
 }
-
 ```
 
 字段说明：
 
-+ `levels`：各层级摘要。`description` 层级描述、`load` 加载策略（eager/lazy）、`cache` 缓存 TTL 秒数、`route_count` 该层级路由数量。
-+ `config`：后端全局配置摘要。前端初始化时读取此字段作为最高优先级配置源（见 §5.3 分级覆盖策略）。当前包含 `strict_mode` 和
-  `endpoint_prefix`，后续版本可扩展。
++ `levels`：各层级摘要。`description` 层级描述、`load` 加载策略（eager/lazy）、`route_count` 该层级路由数量。
++ `config`：后端全局配置摘要。前端初始化时读取此字段作为最高优先级配置源（见 §5.3 分级覆盖策略）。当前包含 `strict_mode`、`endpoint_prefix` 和 `cache_ttl`，后续版本可扩展。
 + `unassigned`：当 `fallback_level=null`
   时，所有未分配层级的命名路由列表。包含完整的路由元信息（name/uri/methods/parameters），前端可按需加载和调用。fallback_level
   非 null 时此字段为空数组。
 
-摘要端点同样受 `cache_driver` 控制缓存，TTL 取所有层级中最大的 `cache` 值；若所有层级均为
-`null` 则不缓存。
+摘要端点同样受 `cache_driver` 与 `cache_ttl` 控制缓存。
 
 #### 3.2 Artisan命令
 
@@ -412,8 +406,8 @@ declare const routes: {
 | `levels.{name}.match.middleware`       | `string[]`                   | `[]`               | 中间件匹配列表，匹配逻辑受 `middleware_match` 控制                                                                                                                                     |
 | `levels.{name}.match.middleware_match` | `string\|array`              | `'any'`            | 中间件匹配模式：`'any'`（OR）/ `'all'`（AND）/ DNF 数组（见 §3.1.2 中间件匹配模式）                                                                                                    |
 | `levels.{name}.load`                   | `'eager'\|'lazy'`            | `'lazy'`           | 是否在摘要端点中标记为「前端应预加载」；前端自动发现时据此决定预加载策略                                                                                                               |
-| `levels.{name}.cache`                  | `int\|null`                  | `null`             | 该层级元信息缓存 TTL（秒）；`null` 不缓存，`0` 永久缓存。⚠️ `0` 遵循 Laravel Cache TTL 惯例（永久），非 HTTP `Cache-Control: max-age=0` 含义。缓存仅通过包内部管理，不使用 HTTP 响应头 |
 | `endpoint_prefix`                      | `string`                     | `'/_forge/routes'` | 路由元信息对外端点前缀（同时用于层级端点和摘要端点）                                                                                                                                   |
+| `cache_ttl`                            | `int\|null`                  | `3600`             | 统一缓存 TTL（秒）；`null` 不缓存，`0` 永久缓存。同时作用于所有层级端点与摘要端点。⚠️ `0` 遵循 Laravel Cache TTL 惯例（永久），非 HTTP `Cache-Control: max-age=0` 含义                                                                       |
 | `cache_driver`                         | `string\|null`               | `null`             | 缓存驱动；`null` 用默认驱动，可指定 `redis`/`file`/`array` 等                                                                                                                          |
 | `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 fallback/unassigned（false）                                                                                                                |
 | `fallback_level`                       | `string\|null`               | `null`             | 兜底层级名；`null` 时未命中路由归入「未分配」分组（可通过摘要端点 §3.1.6 获取）；非 null 则归入指定层级                                                                                |
@@ -441,7 +435,7 @@ declare const routes: {
 | 端点响应     | `/_forge/routes/{level}` 返回结构、`/_forge/routes` 摘要端点返回结构、缓存命中、未声明层级 404                                    |
 | 严格模式     | `strict_mode=true` 未命中抛异常、`false` + `fallback_level=null` 归入 unassigned、`false` + `fallback_level` 非 null 归入指定层级 |
 | Laravel 兼容 | Laravel 11/12/13 三版本矩阵；资源路由、嵌套 group、命名空间                                                                       |
-| 缓存         | `cache_driver` 各驱动（redis/file/array）、TTL 过期、手动失效、`0` 永久缓存                                                       |
+| 缓存         | `cache_driver` 各驱动（redis/file/array）、TTL 过期、手动失效、`0` 永久缓存、`cache_ttl=null` 不缓存                                                       |
 
 ## 8. 版本与发布
 
@@ -452,7 +446,7 @@ declare const routes: {
 - ✅ 元信息端点：按层级返回路由元信息（名称 + URI + method + 参数）
 - ✅ 摘要端点：返回所有层级概览与全局配置，供前端初始化自动发现
 - ✅ `middleware_match`：支持 `any` / `all` / DNF 数组三种匹配模式
-- ✅ 独立缓存：按层级独立缓存响应，支持多种缓存驱动
+- ✅ 统一缓存：所有层级端点与摘要端点共享同一 TTL 配置，支持多种缓存驱动
 - ✅ Artisan 命令：`route:forge:list` 查看层级分配结果、`route:forge:types` 生成 TS 类型声明
 
 ### 8.2 v1.x 路线图

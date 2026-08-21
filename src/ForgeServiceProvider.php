@@ -114,6 +114,7 @@ class ForgeServiceProvider extends ServiceProvider
     {
         // RouteCache：按 forge.cache_driver 选择 store；null 表示用默认 cache.store
         // 开发模式（app.debug=true）下跳过所有缓存读写，路由变更即时生效
+        // TTL 由 forge.cache_ttl 统一控制所有层级与摘要端点
         $this->app->singleton(RouteCache::class, function ($app) {
             /** @var Container $app */
             $driver = $app->make('config')->get('forge.cache_driver');
@@ -121,7 +122,8 @@ class ForgeServiceProvider extends ServiceProvider
                 ? $app->make(CacheRepository::class)
                 : $app->make('cache')->store($driver);
             $debugMode = (bool) $app->make('config')->get('app.debug', false);
-            return new RouteCache($store, $debugMode);
+            $ttl = $app->make('config')->get('forge.cache_ttl');
+            return new RouteCache($store, $debugMode, $ttl !== null ? (int) $ttl : null);
         });
 
         // TierResolver：从 forge 配置组装

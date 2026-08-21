@@ -16,8 +16,7 @@ use RouteForge\Laravel\Cache\RouteCache;
  *     "level": "admin",
  *     "routes": {
  *       "admin.users.show": { "uri": "...", "methods": [...], "parameters": [...] }
- *     },
- *     "cache": 3600
+ *     }
  *   }
  */
 readonly class RouteRepository
@@ -34,8 +33,7 @@ readonly class RouteRepository
      *
      * @return array{
      *   level:string,
-     *   routes:array<string,array{uri:string,methods:string[],parameters:string[]}>,
-     *   cache:int|null
+     *   routes:array<string,array{uri:string,methods:string[],parameters:string[]}>
      * }
      */
     public function getRoutesByLevel(string $level): array
@@ -70,7 +68,6 @@ readonly class RouteRepository
         $payload = [
             'level'  => $level,
             'routes' => $routes,
-            'cache'  => $this->levelsConfig[$level]['cache'] ?? null,
         ];
 
         $this->cache->set($level, $payload);
@@ -105,12 +102,12 @@ readonly class RouteRepository
     /**
      * 摘要端点响应（SPEC §3.1.6）：返回所有层级概览、全局配置、未分配路由列表。
      *
-     * 缓存策略：TTL 取所有层级 cache 字段的最大值；全为 null 不缓存。
+     * 缓存策略：TTL 由 RouteCache 构造函数统一控制（config('forge.cache_ttl')）。
      * 缓存 key：route-forge:summary
      *
      * @return array{
-     *   levels: array<string,array{description:string,load:string,cache:int|null,route_count:int}>,
-     *   config: array{strict_mode:bool,endpoint_prefix:string},
+     *   levels: array<string,array{description:string,load:string,route_count:int}>,
+     *   config: array{strict_mode:bool,endpoint_prefix:string,cache_ttl:int|null},
      *   unassigned: array<int,array{name:string,uri:string,methods:string[],parameters:string[]}>
      * }
      */
@@ -129,7 +126,6 @@ readonly class RouteRepository
             $levelsSummary[$level] = [
                 'description' => $cfg['description'] ?? '',
                 'load'        => $cfg['load'] ?? 'lazy',
-                'cache'       => $cfg['cache'] ?? null,
                 'route_count' => $levelRouteCounts[$level] ?? 0,
             ];
         }
@@ -138,6 +134,7 @@ readonly class RouteRepository
         $config = [
             'strict_mode'     => config('forge.strict_mode', false),
             'endpoint_prefix' => (string)config('forge.endpoint_prefix', '/_forge/routes'),
+            'cache_ttl'       => config('forge.cache_ttl'),
         ];
 
         // unassigned：fallback_level=null 时列出所有未命中层级的命名路由
@@ -149,17 +146,7 @@ readonly class RouteRepository
             'unassigned' => $unassigned,
         ];
 
-        // 缓存 TTL = 所有层级 cache 最大值；全 null 不缓存
-        $maxTtl = null;
-        foreach ($this->levelsConfig as $cfg) {
-            $cache = $cfg['cache'] ?? null;
-            if ($cache !== null && ($maxTtl === null || $cache > $maxTtl)) {
-                $maxTtl = $cache;
-            }
-        }
-        if ($maxTtl !== null) {
-            $this->cache->set('summary', array_merge($payload, ['cache' => $maxTtl]));
-        }
+        $this->cache->set('summary', $payload);
 
         return $payload;
     }

@@ -12,7 +12,7 @@ use RouteForge\Laravel\ForgeServiceProvider;
  * 元信息查询端点测试（对应 .docs/SPEC.md §3.1.5, §6.1, §7.1）。
  *
  * 覆盖：
- *   1. 200 + 响应结构（level / routes / cache / uri / methods / parameters）
+ *   1. 200 + 响应结构（level / routes / uri / methods / parameters）
  *   2. 层级隔离：不同 level 互不污染
  *   3. 未命名路由不出现在元信息里
  *   4. 未知层级 → 404 + RF_BE_002
@@ -61,8 +61,7 @@ class EndpointTest extends TestCase
         $response->assertStatus(200);
         $payload = $response->json();
         $this->assertSame('admin', $payload['level']);
-        // admin 层级未配置 cache TTL，默认为 null（不缓存）
-        $this->assertNull($payload['cache']);
+        $this->assertArrayNotHasKey('cache', $payload);
 
         // 路由名带点（'admin.users.index'），不能用 Laravel json() 的 dot-path 访问
         // 直接从 routes 关联数组取条目
@@ -137,7 +136,7 @@ class EndpointTest extends TestCase
     {
         config()->set('forge.cache_driver', 'array');
     
-        // 使用 public 层级（cache=3600）验证缓存命中行为
+        // 使用 public 层级验证缓存命中行为（cache_ttl 默认 3600）
         RouteFacade::get('/public/info', static function () {})
             ->name('public.info')
             ->tier('public');
@@ -172,7 +171,7 @@ class EndpointTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonStructure([
             'levels' => ['public', 'client', 'manage', 'admin'],
-            'config' => ['strict_mode', 'endpoint_prefix'],
+            'config' => ['strict_mode', 'endpoint_prefix', 'cache_ttl'],
             'unassigned',
         ]);
 
@@ -187,12 +186,12 @@ class EndpointTest extends TestCase
             $this->assertArrayHasKey('parameters', $route);
         }
 
-        // levels 中每个层级应包含 description/load/cache/route_count
+        // levels 中每个层级应包含 description/load/route_count（不再有 cache）
         foreach ($payload['levels'] as $levelInfo) {
             $this->assertArrayHasKey('description', $levelInfo);
             $this->assertArrayHasKey('load', $levelInfo);
-            $this->assertArrayHasKey('cache', $levelInfo);
             $this->assertArrayHasKey('route_count', $levelInfo);
+            $this->assertArrayNotHasKey('cache', $levelInfo);
         }
 
         // admin 层级 route_count 应为 1（仅 admin.users.index）
@@ -205,6 +204,7 @@ class EndpointTest extends TestCase
         // config 摘要
         $this->assertFalse($payload['config']['strict_mode']);
         $this->assertSame('/_forge/routes', $payload['config']['endpoint_prefix']);
+        $this->assertSame(3600, $payload['config']['cache_ttl']);
     }
 
     public function test_summary_endpoint_unassigned_is_empty_when_fallback_level_set(): void

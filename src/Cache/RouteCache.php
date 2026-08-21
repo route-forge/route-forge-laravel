@@ -12,7 +12,7 @@ use RouteForge\Laravel\Exceptions\CacheDriverException;
  *
  * cache key 形如：route-forge:{level}
  *
- * TTL：
+ * TTL 由构造函数统一传入（对应 config('forge.cache_ttl')）：
  *   - null：不缓存（每次扫描）
  *   - 0：永久缓存
  *   - 正整数：TTL 秒
@@ -29,14 +29,17 @@ class RouteCache
 
     private readonly ?CacheRepository $store;
     private readonly bool $debugMode;
+    private readonly ?int $ttl;
 
     /**
      * @param bool $debugMode 开发模式下跳过所有缓存读写，确保路由变更即时生效
+     * @param int|null $ttl 统一缓存 TTL（秒）；null=不缓存，0=永久缓存
      */
-    public function __construct(?CacheRepository $store = null, bool $debugMode = false)
+    public function __construct(?CacheRepository $store = null, bool $debugMode = false, ?int $ttl = null)
     {
         $this->store = $store;
         $this->debugMode = $debugMode;
+        $this->ttl = $ttl;
     }
 
     /**
@@ -61,23 +64,22 @@ class RouteCache
     }
 
     /**
-     * 写入某层级缓存条目；payload 中应带 cache 字段决定 TTL。
+     * 写入某层级缓存条目；TTL 由构造函数统一控制。
      */
     public function set(string $level, array $payload): void
     {
         if ($this->store === null || $this->debugMode) {
             return;
         }
-        $ttl = $payload['cache'] ?? null;
+        if ($this->ttl === null) {
+            return; // 不缓存
+        }
         try {
-            if ($ttl === null) {
-                return; // 不缓存
-            }
             $key = $this->key($level);
-            if ($ttl === 0) {
+            if ($this->ttl === 0) {
                 $this->store->forever($key, $payload);
             } else {
-                $this->store->put($key, $payload, (int) $ttl);
+                $this->store->put($key, $payload, $this->ttl);
             }
             // 维护 keys 索引（用于 clear() 不依赖通配符）
             $this->registerKey($key);
