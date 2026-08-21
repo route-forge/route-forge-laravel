@@ -13,11 +13,12 @@
 
 ## 功能概览
 
-Route Forge 后端提供三种互相兼容的路由层级（tier）分配方式，可任选其一或组合使用。层级名完全由项目自定义，包不预设固定层级：
+Route Forge 后端提供多种互相兼容的路由层级（tier）分配方式，可任选其一或组合使用。层级名完全由项目自定义，包不预设固定层级：
 
 1. **`->tier()` 宏**：定义路由时显式标记，链式调用对资源路由同样生效；
 2. **`Route::group` 的 `tier` 选项**：整组路由继承层级，嵌套 group 内层覆盖外层；
-3. **配置文件按规则批量分配**：`config/forge.php` 中按 URI 前缀 / 中间件（支持 `any` / `all` / DNF 数组三种匹配模式）批量归类。
+3. **链式 `tier()` 语法**：`Route::tier('admin')->group(...)` 流式写法，可与 `middleware`/`prefix`/`as` 等任意属性自由链式组合；
+4. **配置文件按规则批量分配**：`config/forge.php` 中按 URI 前缀 / 中间件（支持 `any` / `all` / DNF 数组三种匹配模式）批量归类。
 
 此外还包括：
 
@@ -54,7 +55,7 @@ Route::post('/auth/login', [AuthController::class, 'login'])
     ->name('auth.login')
     ->tier('public');
 
-// 方式二：分组继承
+// 方式二：分组继承（数组语法）
 Route::group([
     'prefix'     => 'admin',
     'middleware' => ['auth', 'admin'],
@@ -64,7 +65,27 @@ Route::group([
          ->name('admin.users.index');
 });
 
-// 方式三：配置批量匹配（config/forge.php）
+// 方式三：链式语法（tier 作为流式属性，可与任意路由属性自由组合）
+Route::tier('admin')->group(function () {
+    Route::get('/users', [AdminUserController::class, 'index'])
+         ->name('admin.users.index');
+});
+
+// 链式组合：tier 与 middleware / prefix / as 等任意顺序拼接
+Route::middleware(['auth', 'admin'])->tier('admin')->prefix('admin')->group(function () {
+    Route::get('/users', [AdminUserController::class, 'index'])
+         ->name('admin.users.index');
+});
+
+// group 后追加 tier（效果等价于数组语法中的 'tier' 键）
+Route::group([
+    'prefix' => 'admin',
+], function () {
+    Route::get('/users', [AdminUserController::class, 'index'])
+         ->name('admin.users.index');
+})->tier('admin');
+
+// 方式四：配置批量匹配（config/forge.php）
 // 'admin' => [
 //     'match' => ['prefix' => ['admin'], 'middleware' => ['auth', 'admin']],
 //     'load'  => 'lazy',

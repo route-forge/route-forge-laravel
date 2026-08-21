@@ -39,20 +39,23 @@ namespace Illuminate\Routing {
     }
 
     /**
-     * Route Forge 扩展：Router::group() 支持 'tier' 属性。
+     * Route Forge 扩展：Router 支持 tier 链式调用与 group 'tier' 属性。
      *
      * 用法示例：
      * ```php
-     * Route::group(['tier' => 'admin', 'prefix' => 'admin'], function () {
-     *     Route::get('/users', [AdminController::class, 'index'])->name('admin.users');
+     * // 数组语法
+     * Route::group(['tier' => 'admin', 'prefix' => 'admin'], function ($router) {
+     *     $router->get('/users', [AdminController::class, 'index'])->name('admin.users');
      * });
+     *
+     * // 链式语法
+     * Route::tier('admin')->prefix('admin')->group(function ($router) {
+     *     $router->get('/users', [AdminController::class, 'index'])->name('admin.users');
+     * });
+     *
+     * // group 后链式 tier
+     * Route::group(['prefix' => 'admin'], function () { ... })->tier('admin');
      * ```
-     *
-     * 组内所有路由自动继承该 tier；嵌套 group 时内层 tier 覆盖外层。
-     *
-     * @param array{tier?:string,prefix?:string,as?:string,middleware?:string|array,namespace?:string,domain?:string,where?:array} $attributes
-     * @param \Closure|array|string $routes
-     * @return void
      */
     class Router
     {
@@ -61,9 +64,23 @@ namespace Illuminate\Routing {
          *
          * @param array{tier?:string,prefix?:string,as?:string,middleware?:string|array,namespace?:string,domain?:string,where?:array} $attributes
          * @param \Closure|array|string $routes
-         * @return void
+         * @return static
          */
-        public function group($attributes, $routes): void
+        public function group($attributes, $routes)
+        {
+            return $this;
+        }
+
+        /**
+         * 设置路由组的 tier（链式语法入口）。
+         *
+         * 通过 Router::__call → ForgeRouteRegistrar 实现，
+         * 返回 Registrar 实例，可继续链式调用 middleware/prefix/as/group 等。
+         *
+         * @param string $tier 层级标识（如 'admin'、'manage'、'client'、'public' 等）
+         * @return \Illuminate\Routing\RouteRegistrar
+         */
+        public function tier(string $tier)
         {
             // IDE helper stub
         }

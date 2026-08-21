@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace RouteForge\Laravel;
 
 use Illuminate\Routing\Router as BaseRouter;
+use Illuminate\Support\Str;
 
 /**
  * Forge 扩展的 Router：覆盖 updateGroupStack 与 mergeGroupAttributesIntoRoute，
@@ -25,6 +26,22 @@ use Illuminate\Routing\Router as BaseRouter;
  *
  * 绑定方式：ForgeServiceProvider::register() 中通过 app->singleton('router', ...)
  * 覆盖 Illuminate\Routing\RoutingServiceProvider 的默认绑定。
+ *
+ * @method \Illuminate\Routing\RouteRegistrar tier(string $tier) 设置路由组 tier，返回 Registrar 支持链式调用
+ * @method \Illuminate\Routing\RouteRegistrar as(string $value)
+ * @method \Illuminate\Routing\RouteRegistrar middleware(array|string|null $middleware)
+ * @method \Illuminate\Routing\RouteRegistrar prefix(string $prefix)
+ * @method \Illuminate\Routing\RouteRegistrar domain(\BackedEnum|string $value)
+ * @method \Illuminate\Routing\RouteRegistrar name(\BackedEnum|string $value)
+ * @method \Illuminate\Routing\RouteRegistrar namespace(string|null $value)
+ * @method \Illuminate\Routing\RouteRegistrar controller(string $controller)
+ * @method \Illuminate\Routing\RouteRegistrar where(array $where)
+ * @method \Illuminate\Routing\RouteRegistrar can(\UnitEnum|string $ability, array|string $models = [])
+ * @method \Illuminate\Routing\RouteRegistrar metadata(array $metadata)
+ * @method \Illuminate\Routing\RouteRegistrar missing(\Closure $missing)
+ * @method \Illuminate\Routing\RouteRegistrar scopeBindings()
+ * @method \Illuminate\Routing\RouteRegistrar withoutMiddleware(array|string $middleware)
+ * @method \Illuminate\Routing\RouteRegistrar withoutScopedBindings()
  */
 class ForgeRouter extends BaseRouter
 {
@@ -55,6 +72,34 @@ class ForgeRouter extends BaseRouter
         }
 
         $this->groupStack[] = $attributes;
+    }
+
+    /**
+     * 覆盖父类 __call，将 RouteRegistrar 替换为 ForgeRouteRegistrar，
+     * 使 tier 成为合法的链式调用属性（Route::tier('admin')->group(...)）。
+     *
+     * 逻辑与父类 Router::__call() 一致，唯一区别是所有 new RouteRegistrar($this)
+     * 改为 new ForgeRouteRegistrar($this)。
+     */
+    public function __call($method, $parameters)
+    {
+        if (static::hasMacro($method)) {
+            return $this->macroCall($method, $parameters);
+        }
+
+        if ($method === 'middleware') {
+            return (new ForgeRouteRegistrar($this))->attribute($method, is_array($parameters[0]) ? $parameters[0] : $parameters);
+        }
+
+        if ($method === 'can') {
+            return (new ForgeRouteRegistrar($this))->attribute($method, [$parameters]);
+        }
+
+        if ($method !== 'where' && Str::startsWith($method, 'where')) {
+            return (new ForgeRouteRegistrar($this))->{$method}(...$parameters);
+        }
+
+        return (new ForgeRouteRegistrar($this))->attribute($method, array_key_exists(0, $parameters) ? $parameters[0] : true);
     }
 
     /**

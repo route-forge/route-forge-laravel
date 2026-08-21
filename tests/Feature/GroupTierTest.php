@@ -102,4 +102,26 @@ class GroupTierTest extends TestCase
 
         $this->assertNull($this->routeTier('standalone'));
     }
+
+    public function test_fluent_tier_group_syntax(): void
+    {
+        // 测试 Route::tier('admin')->group(...) 链式语法
+        RouteFacade::tier('admin')->group(function () {
+            RouteFacade::get('/admin/dashboard', static function () {})
+                ->name('admin.dashboard');
+        });
+
+        $this->assertSame('admin', $this->routeTier('admin.dashboard'));
+    }
+
+    public function test_fluent_middleware_and_tier_chained(): void
+    {
+        // 测试 Route::middleware([...])->tier('manage')->group(...) 链式语法
+        RouteFacade::middleware('web')->tier('manage')->group(function () {
+            RouteFacade::get('/manage/settings', static function () {})
+                ->name('manage.settings');
+        });
+
+        $this->assertSame('manage', $this->routeTier('manage.settings'));
+    }
 }
