@@ -77,20 +77,20 @@ Route::middleware(['auth', 'admin'])->tier('admin')->prefix('admin')->group(func
          ->name('admin.users.index');
 });
 
-// group 后追加 tier（效果等价于数组语法中的 'tier' 键）
-Route::group([
-    'prefix' => 'admin',
-], function () {
-    Route::get('/users', [AdminUserController::class, 'index'])
-         ->name('admin.users.index');
-})->tier('admin');
-
 // 方式四：配置批量匹配（config/forge.php）
 // 'admin' => [
 //     'match' => ['prefix' => ['admin'], 'middleware' => ['auth', 'admin']],
 //     'load'  => 'lazy',
 // ],
 ```
+
+> ⚠️ **注意：组级属性必须在 `group()` 之前声明，不支持 `group()` 返回后追加。**
+>
+> `Route::group([...], fn)->tier('admin')` 这类写法**不会**把 `tier` 应用到该组——Laravel 的 `group()` 在返回前已完成组内路由注册并将组属性出栈，其后链式调用的属性挂在一个全新的 Registrar 上，会被静默丢弃。出现这种用法时，Route Forge 会向 Laravel 日志写入一条 `warning`。
+>
+> 正确写法二选一：
+> - 数组语法：`Route::group(['tier' => 'admin', ...], fn)`
+> - 前置链式：`Route::tier('admin')->group(fn)`
 
 ### 前端拉取元信息
 

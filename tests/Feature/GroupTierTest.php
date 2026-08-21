@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace RouteForge\Laravel\Tests\Feature;
 
 use Illuminate\Routing\Route;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route as RouteFacade;
 use Orchestra\Testbench\TestCase;
+use RouteForge\Laravel\Exceptions\DiscardedRegistrarAttributesException;
 use RouteForge\Laravel\ForgeServiceProvider;
 
 /**
@@ -123,5 +125,46 @@ class GroupTierTest extends TestCase
         });
 
         $this->assertSame('manage', $this->routeTier('manage.settings'));
+    }
+
+    public function test_trailing_tier_after_group_is_discarded_with_warning(): void
+    {
+        // group(...) 执行完后组属性已出栈，尾部 ->tier() 挂在全新 Registrar 上，
+        // 不作用于已注册的组；该 Registrar 销毁时应记录警告。
+        Log::shouldReceive('warning')->once();
+
+        RouteFacade::group(['as' => 'trailing.'], function () {
+            RouteFacade::get('/trailing', static function () {})
+                ->name('route');
+        })->tier('public');
+
+        // tier 已被丢弃：组内路由无 tier
+        $this->assertNull($this->routeTier('trailing.route'));
+    }
+
+    public function test_fluent_tier_before_group_does_not_warn(): void
+    {
+        // 前置链式写法属性被正常消费，不应产生警告
+        Log::shouldReceive('warning')->never();
+
+        RouteFacade::tier('admin')->group(function () {
+            RouteFacade::get('/silent', static function () {})
+                ->name('silent');
+        });
+
+        $this->assertSame('admin', $this->routeTier('silent'));
+    }
+
+    public function test_trailing_tier_after_group_throws_in_strict_mode(): void
+    {
+        // strict_mode=true 时，尾部链式属性被丢弃应抛异常
+        config(['forge.strict_mode' => true]);
+
+        $this->expectException(DiscardedRegistrarAttributesException::class);
+
+        RouteFacade::group(['as' => 'strict.'], function () {
+            RouteFacade::get('/strict', static function () {})
+                ->name('route');
+        })->tier('public');
     }
 }

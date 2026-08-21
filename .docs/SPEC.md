@@ -196,6 +196,12 @@ Route::group(['tier' => 'admin'], function () {
 实现方式：包在 boot 阶段监听 `Route::group` 调用，把 `tier` 透传到组内每条路由的 action，等价于自动给组内每条路由调用
 `->tier()`。分组标记与单条显式 `->tier()` 相比，单条优先级更高。
 
+> ⚠️ **尾部链式写法不受支持**：`Route::group([...], fn)->tier('x')` 不会将 `tier` 应用于该组。
+> Laravel 的 `group()` 返回时组内路由已注册完毕、组属性已出栈，其后链式创建的 Registrar 属性无消费方，
+> 会被静默丢弃。Forge 对此场景做运行时检测：持有属性却从未注册 group/路由的 Registrar 被销毁时，
+> 向 Laravel 日志写入一条 `warning`（含被丢弃的属性名与正确写法提示）。
+> 组级 `tier` 只支持两种写法：数组选项 `Route::group(['tier' => ...], fn)` 与前置链式 `Route::tier(...)->group(fn)`。
+
 #### 3.1.4 层级分配优先级
 
 当多种分配方式并存时，按以下优先级决定一条路由的最终层级（高优先级覆盖低优先级）：
@@ -431,20 +437,21 @@ php artisan route:forge:clear --level=admin
 | `cache_driver`                         | `string\|null`               | `null`             | 缓存驱动；`null` 用默认驱动，可指定 `redis`/`file`/`array` 等                                                                                                          |
 | `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 fallback/unassigned（false）                                                                                                |
 | `fallback_level`                       | `string\|null`               | `null`             | 兜底层级名；`null` 时未命中路由归入「未分配」分组（可通过摘要端点 §3.1.6 获取）；非 null 则归入指定层级                                                                |
-| `classifier`                           | `callable\|null`             | `null`             | 自定义分类回调，签名 `fn(Route $r): ?string`，返回层级名或 null。返回的层级名必须在 `levels` 配置中存在，否则抛 `UnknownClassifierTierException` |
+| `classifier`                           | `callable\|null`             | `null`             | 自定义分类回调，签名 `fn(Route $r): ?string`，返回层级名或 null。返回的层级名必须在 `levels` 配置中存在，否则抛 `UnknownClassifierTierException`                       |
 
 ## 6. 错误码
 
 所有 Route Forge 抛出的异常都继承自 `ForgeExceptionContract`，附带 `code`、`route`、`level`、`context` 字段，便于调用方 catch 后统一处理。
 
-| 错误类                            | code        | 触发场景                                          | HTTP 状态 |
-|-----------------------------------|-------------|---------------------------------------------------|----------|
-| `RouteTierNotAssignedException`   | `RF_BE_001` | `strict_mode=true` 且路由未命中任何层级           | 500      |
-| `UnknownLevelException`           | `RF_BE_002` | 请求的层级名不在 `levels` 配置中                  | 404      |
-| `CacheDriverException`            | `RF_BE_003` | 指定的 `cache_driver` 不可用                      | 500      |
-| `ClassifierException`             | `RF_BE_004` | `classifier` 回调抛错                             | 500      |
-| `RouteMissingNameException`       | `RF_BE_005` | `strict_mode=true` 且路由设置了 tier 但没有路由名 | 500      |
-| `UnknownClassifierTierException`  | `RF_BE_006` | `classifier` 返回的层级名不在 `levels` 配置中     | 500      |
+| 错误类                                  | code        | 触发场景                                                                | HTTP 状态 |
+|-----------------------------------------|-------------|-------------------------------------------------------------------------|-----------|
+| `RouteTierNotAssignedException`         | `RF_BE_001` | `strict_mode=true` 且路由未命中任何层级                                 | 500       |
+| `UnknownLevelException`                 | `RF_BE_002` | 请求的层级名不在 `levels` 配置中                                        | 404       |
+| `CacheDriverException`                  | `RF_BE_003` | 指定的 `cache_driver` 不可用                                            | 500       |
+| `ClassifierException`                   | `RF_BE_004` | `classifier` 回调抛错                                                   | 500       |
+| `RouteMissingNameException`             | `RF_BE_005` | `strict_mode=true` 且路由设置了 tier 但没有路由名                       | 500       |
+| `UnknownClassifierTierException`        | `RF_BE_006` | `classifier` 返回的层级名不在 `levels` 配置中                           | 500       |
+| `DiscardedRegistrarAttributesException` | `RF_BE_007` | `strict_mode=true` 且 `Route::group(...)->tier(...)` 尾部链式属性被丢弃 | 500       |
 
 ## 7. 测试矩阵
 

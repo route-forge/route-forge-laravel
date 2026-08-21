@@ -52,10 +52,11 @@ namespace Illuminate\Routing {
      * Route::tier('admin')->prefix('admin')->group(function ($router) {
      *     $router->get('/users', [AdminController::class, 'index'])->name('admin.users');
      * });
-     *
-     * // group 后链式 tier
-     * Route::group(['prefix' => 'admin'], function () { ... })->tier('admin');
      * ```
+     *
+     * ⚠️ 注意：`Route::group(...)->tier('admin')` 这类 group 返回后追加属性的写法无效——
+     * group() 内部已完成组内路由注册并将组属性出栈，尾部链式属性挂在全新的 Registrar
+     * 上会被丢弃（Route Forge 运行时会记录警告）。组级 tier 请用数组语法或前置链式语法。
      */
     class Router
     {
