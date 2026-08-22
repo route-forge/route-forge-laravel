@@ -10,6 +10,7 @@ use Illuminate\Routing\Route;
 use Illuminate\Routing\RouteRegistrar as BaseRouteRegistrar;
 use Illuminate\Support\Facades\Log;
 use RouteForge\Laravel\Exceptions\DiscardedRegistrarAttributesException;
+use RouteForge\Laravel\Exceptions\UnknownLevelException;
 use Throwable;
 use UnitEnum;
 
@@ -84,6 +85,26 @@ class ForgeRouteRegistrar extends BaseRouteRegistrar
      * 未消费即销毁 = 属性被静默丢弃（典型场景：group(...) 返回后追加 ->tier()）。
      */
     private bool $attributesConsumed = false;
+
+    /**
+     * 重写属性设置方法，拦截 tier 属性并验证其值必须在 levels 配置中存在。
+     *
+     * 覆盖场景：Route::tier('x') 链式调用。
+     */
+    public function attribute($key, $value): static
+    {
+        if ($key === 'tier' && is_string($value) && $value !== '') {
+            $levels = config('forge.levels', []);
+            if (!isset($levels[$value])) {
+                throw new UnknownLevelException(
+                    'Cannot set tier [' . $value . ']: not defined in levels config. '
+                    . 'Available levels: ' . implode(', ', array_keys($levels)),
+                );
+            }
+        }
+
+        return parent::attribute($key, $value);
+    }
 
     /**
      * 注册路由组：属性在此处被消费（写入 groupStack），标记后委托父类。

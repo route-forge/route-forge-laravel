@@ -8,6 +8,7 @@ use Illuminate\Routing\Route;
 use PHPUnit\Framework\TestCase;
 use RouteForge\Laravel\Exceptions\RouteMissingNameException;
 use RouteForge\Laravel\Exceptions\UnknownClassifierTierException;
+use RouteForge\Laravel\Exceptions\UnknownLevelException;
 use RouteForge\Laravel\TierResolver;
 
 /**
@@ -302,5 +303,63 @@ class TierResolverTest extends TestCase
 
         // classifier 返回 null，继续走配置 match 规则
         $this->assertSame('admin', $resolver->resolve($route));
+    }
+
+    // ---------------------------------------------------------------------
+    // 显式 tier 值必须在 levels 配置中
+    // ---------------------------------------------------------------------
+
+    public function test_explicit_tier_not_in_levels_throws_exception(): void
+    {
+        $levels   = ['admin' => ['match' => []], 'public' => ['match' => []]];
+        $resolver = new TierResolver($levels);
+
+        $route = $this->makeRoute('/test', [], ['tier' => 'nonexistent']);
+
+        $this->expectException(UnknownLevelException::class);
+        $resolver->resolve($route);
+    }
+
+    public function test_explicit_tier_in_levels_works(): void
+    {
+        $levels   = ['admin' => ['match' => []], 'public' => ['match' => []]];
+        $resolver = new TierResolver($levels);
+
+        $route = $this->makeRoute('/test', [], ['tier' => 'admin']);
+
+        $this->assertSame('admin', $resolver->resolve($route));
+    }
+
+    // ---------------------------------------------------------------------
+    // fallback_level 必须在 levels 配置中
+    // ---------------------------------------------------------------------
+
+    public function test_fallback_level_not_in_levels_throws_exception(): void
+    {
+        $levels = ['admin' => ['match' => []]];
+
+        $this->expectException(UnknownLevelException::class);
+        new TierResolver($levels, fallbackLevel: 'nonexistent');
+    }
+
+    public function test_fallback_level_in_levels_works(): void
+    {
+        $levels = ['admin' => ['match' => []]];
+
+        // 不应抛异常
+        $resolver = new TierResolver($levels, fallbackLevel: 'admin');
+
+        // 未命中任何规则时应兜底到 fallback_level
+        $route = $this->makeRoute('/test', [], []);
+        $this->assertSame('admin', $resolver->resolve($route));
+    }
+
+    public function test_fallback_level_null_is_valid(): void
+    {
+        $levels = ['admin' => ['match' => []]];
+
+        // fallbackLevel=null 是默认值，不应抛异常
+        $resolver = new TierResolver($levels, fallbackLevel: null);
+        $this->assertNull($resolver->resolve($this->makeRoute('/test', [], [])));
     }
 }

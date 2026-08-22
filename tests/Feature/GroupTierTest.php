@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route as RouteFacade;
 use Orchestra\Testbench\TestCase;
 use RouteForge\Laravel\Exceptions\DiscardedRegistrarAttributesException;
+use RouteForge\Laravel\Exceptions\UnknownLevelException;
 use RouteForge\Laravel\ForgeServiceProvider;
 
 /**
@@ -166,5 +167,65 @@ class GroupTierTest extends TestCase
             RouteFacade::get('/strict', static function () {})
                 ->name('route');
         })->tier('public');
+    }
+
+    // ---------------------------------------------------------------------
+    // tier 值必须在 levels 配置中验证
+    // ---------------------------------------------------------------------
+
+    public function test_fluent_tier_with_invalid_level_throws_exception(): void
+    {
+        // Route::tier('nonexistent') 链式调用时，tier 值不在 levels 配置中应抛异常
+        $this->expectException(UnknownLevelException::class);
+
+        RouteFacade::tier('nonexistent')->group(function () {
+            RouteFacade::get('/test', static function () {});
+        });
+    }
+
+    public function test_group_array_tier_with_invalid_level_throws_exception(): void
+    {
+        // Route::group(['tier' => 'nonexistent'], ...) 数组设置时，tier 值不在 levels 配置中应抛异常
+        $this->expectException(UnknownLevelException::class);
+
+        RouteFacade::group(['tier' => 'nonexistent'], function () {
+            RouteFacade::get('/test', static function () {});
+        });
+    }
+
+    public function test_fluent_tier_with_valid_level_works(): void
+    {
+        // Route::tier('admin') 链式调用，tier 值在 levels 配置中应正常工作
+        Log::shouldReceive('warning')->never();
+
+        RouteFacade::tier('admin')->group(function () {
+            RouteFacade::get('/admin/test', static function () {})
+                       ->name('admin.test');
+        });
+
+        $this->assertSame('admin', $this->routeTier('admin.test'));
+    }
+
+    public function test_group_array_tier_with_valid_level_works(): void
+    {
+        // Route::group(['tier' => 'manage'], ...) 数组设置，tier 值在 levels 配置中应正常工作
+        RouteFacade::group(['tier' => 'manage'], function () {
+            RouteFacade::get('/manage/test', static function () {})
+                       ->name('manage.test');
+        });
+
+        $this->assertSame('manage', $this->routeTier('manage.test'));
+    }
+
+    public function test_nested_group_with_invalid_inner_tier_throws_exception(): void
+    {
+        // 嵌套 group 内层 tier 值不在 levels 配置中应抛异常
+        $this->expectException(UnknownLevelException::class);
+
+        RouteFacade::group(['tier' => 'admin'], function () {
+            RouteFacade::group(['tier' => 'nonexistent'], function () {
+                RouteFacade::get('/test', static function () {});
+            });
+        });
     }
 }

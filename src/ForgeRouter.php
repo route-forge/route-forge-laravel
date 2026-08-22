@@ -9,6 +9,7 @@ use Closure;
 use Illuminate\Routing\Router as BaseRouter;
 use Illuminate\Routing\RouteRegistrar;
 use Illuminate\Support\Str;
+use RouteForge\Laravel\Exceptions\UnknownLevelException;
 use UnitEnum;
 
 /**
@@ -50,10 +51,12 @@ use UnitEnum;
 class ForgeRouter extends BaseRouter
 {
     /**
-     * 在 group attributes 入 groupStack 之前，纠正 tier 字段。
+     * 在 group attributes 入 groupStack 之前，纠正 tier 字段并验证其值。
      *
      * RouteGroup::merge 用 array_merge_recursive 处理嵌套 string tier，会把它合并成 array。
      * 我们需要确保 tier 始终是 string（取内层 = 最后一个元素），符合「内层覆盖外层」约定。
+     *
+     * 覆盖场景：Route::group(['tier' => 'x'], ...) 数组设置。
      */
     protected function updateGroupStack(array $attributes): void // phpcs:ignore
     {
@@ -72,6 +75,17 @@ class ForgeRouter extends BaseRouter
                         unset($attributes['tier']);
                     }
                 }
+            }
+        }
+
+        // 验证 tier 值必须在 levels 配置中存在
+        if (isset($attributes['tier']) && is_string($attributes['tier']) && $attributes['tier'] !== '') {
+            $levels = config('forge.levels', []);
+            if (!isset($levels[$attributes['tier']])) {
+                throw new UnknownLevelException(
+                    'Cannot set group tier [' . $attributes['tier'] . ']: not defined in levels config. '
+                    . 'Available levels: ' . implode(', ', array_keys($levels)),
+                );
             }
         }
 

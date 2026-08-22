@@ -7,10 +7,11 @@ namespace RouteForge\Laravel;
 use Closure;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Arr;
+use RouteForge\Laravel\Exceptions\ClassifierException;
 use RouteForge\Laravel\Exceptions\RouteMissingNameException;
 use RouteForge\Laravel\Exceptions\RouteTierNotAssignedException;
-use RouteForge\Laravel\Exceptions\ClassifierException;
 use RouteForge\Laravel\Exceptions\UnknownClassifierTierException;
+use RouteForge\Laravel\Exceptions\UnknownLevelException;
 use Throwable;
 
 /**
@@ -31,6 +32,12 @@ readonly class TierResolver
         private bool     $strictMode = false,
         private ?string  $fallbackLevel = null,
     ) {
+        if ($this->fallbackLevel !== null && !isset($this->levelsConfig[$this->fallbackLevel])) {
+            throw new UnknownLevelException(
+                'fallback_level [' . $this->fallbackLevel . '] is not defined in levels config. '
+                . 'Available levels: ' . implode(', ', array_keys($this->levelsConfig)),
+            );
+        }
     }
 
     /**
@@ -40,6 +47,7 @@ readonly class TierResolver
      * @throws RouteTierNotAssignedException    当 strict_mode=true 且未命中任何层级
      * @throws ClassifierException              当 classifier 回调抛错
      * @throws UnknownClassifierTierException   当 classifier 返回的层级名不在 levels 配置中
+     * @throws UnknownLevelException            当显式 tier 值不在 levels 配置中
      */
     public function resolve(Route $route): ?string
     {
@@ -58,6 +66,14 @@ readonly class TierResolver
     
         // 1 & 2：显式 ->tier() 与 group tier 透传（最终都写入 action['tier']）
         if (is_string($explicit) && $explicit !== '') {
+            // 显式 tier 值必须在 levels 配置中存在
+            if (!isset($this->levelsConfig[$explicit])) {
+                throw new UnknownLevelException(
+                    'Route ' . ($route->getName() ?? '(' . $route->uri() . ')')
+                    . ' has tier [' . $explicit . '] which is not defined in levels config. '
+                    . 'Available levels: ' . implode(', ', array_keys($this->levelsConfig)),
+                );
+            }
             return $explicit;
         }
 
