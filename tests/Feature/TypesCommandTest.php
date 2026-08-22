@@ -62,18 +62,30 @@ class TypesCommandTest extends TestCase
         return [$exit, $buffer->fetch()];
     }
 
-    public function test_default_stdout_generates_dts_with_method_params_response(): void
+    public function test_default_stdout_generates_dts_with_two_level_structure(): void
     {
         [$exit, $out] = $this->runTypes();
 
         $this->assertSame(0, $exit);
         $this->assertStringContainsString('export interface ForgeRoutes', $out);
         $this->assertStringContainsString('// AUTO-GENERATED', $out);
+        $this->assertStringContainsString('// 生成时间:', $out);
+        $this->assertStringContainsString('export type ForgeLevel =', $out);
+        $this->assertStringContainsString('export type ForgeRouteName<L extends ForgeLevel>', $out);
+        $this->assertStringContainsString('export interface ForgeRouteMeta', $out);
+        // 二级结构：层级 → 路由名
+        $this->assertStringContainsString('admin: {', $out);
+        $this->assertStringContainsString('client: {', $out);
         $this->assertStringContainsString("method: 'GET';", $out);
         $this->assertStringContainsString("method: 'POST';", $out);
         $this->assertStringContainsString('response: unknown;', $out);
         // GET 路由参数 {id} → id: string | number
         $this->assertStringContainsString('id: string | number;', $out);
+        // 工具类型
+        $this->assertStringContainsString('export type ForgeMethod<', $out);
+        $this->assertStringContainsString('export type ForgeParams<', $out);
+        $this->assertStringContainsString('export type ForgeBody<', $out);
+        $this->assertStringContainsString('export type ForgeResponse<', $out);
     }
 
     public function test_post_route_has_body_field(): void
@@ -84,34 +96,38 @@ class TypesCommandTest extends TestCase
         $this->assertStringContainsString('body: unknown;', $out);
     }
 
-    public function test_level_filter_only_generates_matching_routes(): void
+    public function test_level_filter_only_generates_matching_level(): void
     {
         [$exit, $out] = $this->runTypes(['--level' => 'admin']);
 
         $this->assertSame(0, $exit);
+        $this->assertStringContainsString('admin: {', $out);
         $this->assertStringContainsString('admin.users.store', $out);
         $this->assertStringContainsString('admin.users.show', $out);
+        $this->assertStringNotContainsString('client: {', $out);
         $this->assertStringNotContainsString('client.dashboard', $out);
     }
 
-    public function test_json_output_format(): void
+    public function test_json_output_two_level_structure(): void
     {
         [$exit, $out] = $this->runTypes(['--json' => true]);
 
         $this->assertSame(0, $exit);
 
         $decoded = json_decode($out, true);
-        $this->assertIsArray($decoded, 'JSON 输出应为对象（键为路由名）');
-        $this->assertArrayHasKey('admin.users.store', $decoded);
-        $this->assertArrayHasKey('admin.users.show', $decoded);
+        $this->assertIsArray($decoded, 'JSON 输出应为二级结构（层级 → 路由名）');
+        $this->assertArrayHasKey('admin', $decoded);
+        $this->assertArrayHasKey('client', $decoded);
+        $this->assertArrayHasKey('admin.users.store', $decoded['admin']);
+        $this->assertArrayHasKey('admin.users.show', $decoded['admin']);
 
-        $store = $decoded['admin.users.store'];
+        $store = $decoded['admin']['admin.users.store'];
         $this->assertSame('POST', $store['method']);
         $this->assertSame([], $store['params']);
         $this->assertSame('unknown', $store['body']);
         $this->assertSame('unknown', $store['response']);
 
-        $show = $decoded['admin.users.show'];
+        $show = $decoded['admin']['admin.users.show'];
         $this->assertSame('GET', $show['method']);
         $this->assertSame(['id'], $show['params']);
         $this->assertArrayNotHasKey('body', $show);
@@ -130,6 +146,7 @@ class TypesCommandTest extends TestCase
         $this->assertFileExists($outPath);
         $content = (string) file_get_contents($outPath);
         $this->assertStringContainsString('export interface ForgeRoutes', $content);
+        $this->assertStringContainsString('admin: {', $content);
         $this->assertStringContainsString("method: 'POST';", $content);
 
         @unlink($outPath);
