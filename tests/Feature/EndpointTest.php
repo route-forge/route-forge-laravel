@@ -255,4 +255,55 @@ class EndpointTest extends TestCase
         $payload = $response->json();
         $this->assertSame([], $payload['unassigned']);
     }
+
+    public function test_endpoint_returns_parameter_defaults_empty_when_no_defaults(): void
+    {
+        RouteFacade::get('/admin/users/{id}', static function () {})
+                   ->name('admin.users.show')
+                   ->tier('admin');
+
+        $routes = $this->get($this->endpoint('admin'))->json('routes');
+        $route  = $routes['admin.users.show'];
+
+        $this->assertArrayHasKey('parameter_defaults', $route);
+        // 无默认值时，parameter_defaults 为空对象（JSON 解码后为空数组）
+        $this->assertEmpty($route['parameter_defaults']);
+    }
+
+    public function test_endpoint_returns_parameter_defaults_with_values(): void
+    {
+        RouteFacade::get('/admin/posts/{page?}', static function () {})
+                   ->name('admin.posts.index')
+                   ->tier('admin')
+                   ->defaults('page', '1');
+
+        $routes = $this->get($this->endpoint('admin'))->json('routes');
+        $route  = $routes['admin.posts.index'];
+
+        $this->assertArrayHasKey('parameter_defaults', $route);
+        $this->assertSame(['page' => '1'], $route['parameter_defaults']);
+    }
+
+    public function test_summary_endpoint_unassigned_includes_parameter_defaults(): void
+    {
+        config()->set('forge.expose_unassigned', true);
+
+        RouteFacade::get('/items/{page?}', static function () {})
+                   ->name('items.index')
+                   ->defaults('page', '1');
+
+        $payload = $this->get($this->summaryEndpoint())->json();
+        // 按路由名查找 items.index（unassigned 中可能包含 forge 自身端点路由）
+        $itemsRoute = null;
+        foreach ($payload['unassigned'] as $route) {
+            if (($route['name'] ?? '') === 'items.index') {
+                $itemsRoute = $route;
+                break;
+            }
+        }
+
+        $this->assertNotNull($itemsRoute, 'items.index should be in unassigned');
+        $this->assertArrayHasKey('parameter_defaults', $itemsRoute);
+        $this->assertSame(['page' => '1'], $itemsRoute['parameter_defaults']);
+    }
 }

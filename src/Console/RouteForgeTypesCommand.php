@@ -65,9 +65,14 @@ class RouteForgeTypesCommand extends Command
             $params  = $route->parameterNames();
             $hasBody = in_array($method, self::BODY_METHODS, true);
 
+            // 从 URI 模板提取 URL 可选参数（{param?} 语法）
+            $optionalParams = $this->extractOptionalParams($route->uri());
+
             $routesByLevel[$level][$name] = [
                 'method'  => $method,
                 'params'  => $params,
+                'optionalParams' => $optionalParams,
+                'defaults'       => $route->defaults,
                 'hasBody' => $hasBody,
                 // response 始终为 unknown（v1.0 不支持自定义响应类型）
                 'response' => 'unknown',
@@ -99,7 +104,7 @@ class RouteForgeTypesCommand extends Command
     /**
      * 生成 d.ts 内容（二级映射：层级 → 路由名 → 类型约束）
      *
-     * @param array<string,array<string,array{method:string,params:string[],hasBody:bool,response:string}>> $routesByLevel
+     * @param array<string,array<string,array{method:string,params:string[],optionalParams:string[],defaults:array<string,mixed>,hasBody:bool,response:string}>> $routesByLevel
      */
     private function generateDts(array $routesByLevel): string
     {
@@ -126,6 +131,7 @@ class RouteForgeTypesCommand extends Command
         $lines[]    = '  method: string;';
         $lines[]    = '  uri: string;';
         $lines[]    = '  parameters: string[];';
+        $lines[] = '  parameter_defaults: Record<string, unknown>;';
         $lines[]    = '}';
         $lines[]    = '';
         $lines[]    = '// ─── 按层级 → 路由名 → 类型约束的映射 ────────────────────────';
@@ -137,7 +143,8 @@ class RouteForgeTypesCommand extends Command
             }
             $lines[] = "  {$level}: {";
             foreach ($routes as $name => $r) {
-                $paramsFields = $this->formatParamsFields($r['params'], '      ');
+                $paramsFields = $this->formatParamsFields($r['params'], $r['optionalParams'],
+                    '      ');
                 $paramsBlock  = empty($paramsFields)
                     ? '{}'
                     : "{\n" . implode("\n", $paramsFields) . "\n    }";
@@ -203,6 +210,9 @@ class RouteForgeTypesCommand extends Command
                     'method' => $r['method'],
                     'params' => $r['params'],
                 ];
+                if (!empty($r['defaults'])) {
+                    $entry['parameter_defaults'] = (object)$r['defaults'];
+                }
                 if ($r['hasBody']) {
                     $entry['body'] = 'unknown';
                 }
@@ -226,13 +236,31 @@ class RouteForgeTypesCommand extends Command
     /**
      * 格式化 params 字段列表
      *
+     * TS 类型的 ? 标记基于 URL 模板中参数是否可选（{param?} 语法），
+     * 而非是否有默认值。默认值通过 parameter_defaults 独立返回。
+     *
      * @param string[] $params
+     * @param string[] $optionalParams URL 中可选的参数名列表（{param?} 语法）
      * @param string   $indent
      *
      * @return string[]
      */
-    private function formatParamsFields(array $params, string $indent): array
+    private function formatParamsFields(array $params, array $optionalParams, string $indent): array
     {
-        return array_map(fn($p) => "{$indent}{$p}: string | number;", $params);
+        return array_map(function ($p) use ($optionalParams, $indent) {
+            $optional = in_array($p, $optionalParams, true) ? '?' : '';
+            return "{$indent}{$p}{$optional}: string | number;";
+        }, $params);
+    }
+
+    /**
+     * 从 URI 模板中提取可选参数名（{param?} 语法）
+     *
+     * @return string[]
+     */
+    private function extractOptionalParams(string $uri): array
+    {
+        preg_match_all('/\{(\w+)\?\}/', $uri, $matches);
+        return $matches[1] ?? [];
     }
 }

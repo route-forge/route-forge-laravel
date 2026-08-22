@@ -240,7 +240,8 @@ GET /_forge/routes/{level}   # 返回该层级下所有命名路由的元信息
         "GET",
         "HEAD"
       ],
-      "parameters": []
+      "parameters": [],
+      "parameter_defaults": {}
     },
     "admin.users.show": {
       "uri": "admin/users/{user}",
@@ -250,7 +251,21 @@ GET /_forge/routes/{level}   # 返回该层级下所有命名路由的元信息
       ],
       "parameters": [
         "user"
-      ]
+      ],
+      "parameter_defaults": {}
+    },
+    "admin.posts.index": {
+      "uri": "admin/posts/{page?}",
+      "methods": [
+        "GET",
+        "HEAD"
+      ],
+      "parameters": [
+        "page"
+      ],
+      "parameter_defaults": {
+        "page": "1"
+      }
     }
   }
 }
@@ -342,7 +357,8 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
         "GET",
         "HEAD"
       ],
-      "parameters": []
+      "parameters": [],
+      "parameter_defaults": {}
     }
   ]
 }
@@ -353,7 +369,7 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
 + `levels`：各层级摘要。`description` 层级描述、`load` 加载策略（eager/lazy）、`route_count` 该层级路由数量、`route` 该层级元信息端点的请求信息（`uri` + `methods`），前端可据此直接构造请求获取该层级的全量路由数据。
 + `config`：后端全局配置摘要。前端初始化时读取此字段作为最高优先级配置源（见 §5.3 分级覆盖策略）。当前包含 `strict_mode`、`endpoint_prefix` 和 `cache_ttl`，后续版本可扩展。
 + `unassigned`：当 `fallback_level=null`
-  时，所有未分配层级的命名路由列表。包含完整的路由元信息（name/uri/methods/parameters），前端可按需加载和调用。fallback_level
+  时，所有未分配层级的命名路由列表。包含完整的路由元信息（name/uri/methods/parameters/parameter_defaults），前端可按需加载和调用。fallback_level
   非 null 时此字段为空数组。
 
 摘要端点同样受 `cache_driver` 与 `cache_ttl` 控制缓存。
@@ -430,6 +446,7 @@ export interface ForgeRouteMeta {
   method: string;
   uri: string;
   parameters: string[];
+  parameter_defaults: Record<string, unknown>;
 }
 
 // ─── 按层级 → 路由名 → 类型约束的映射 ────────────────────────
@@ -501,8 +518,11 @@ export type ForgeResponse<
 - `ForgeRoutes` 是 **二级映射**——第一级 key 是层级名（如 `public`/`admin`/`manage`），第二级 key 是路由名（如
   `admin.users.show`）。
 - 每条路由包含：`method`（字符串字面量，取第一个非 HEAD 的 HTTP 方法）、`params`（路径参数对象，类型固定
-  `string | number`；无参数时为空对象 `{}`）、`body`（仅 POST/PUT/PATCH 方法有此字段，默认 `unknown`）、
+  `string | number`；URL 可选参数 `{param?}` 标记为 `?`；无参数时为空对象 `{}`）、`body`（仅
+  POST/PUT/PATCH 方法有此字段，默认 `unknown`）、
   `response`（响应类型，默认 `unknown`）。
+- `parameter_defaults` 独立返回参数默认值，与 TS 类型的 `?` 标记无关： URL 必选参数 `{user}`
+  即使设置了默认值，在 TS 中仍然是必选字段； 前端可根据 `parameter_defaults` 在构造 URL 时自动填充默认值。
 - `ForgeLevel`、`ForgeRouteName<L>` 用于在前端 `forge.api(level, name, params)` 调用时提供类型约束。
 - 工具类型 `ForgeMethod`、`ForgeParams`、`ForgeBody`、`ForgeResponse` 用于从 `ForgeRoutes`
   中提取指定层级 + 路由名的具体字段类型。

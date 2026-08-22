@@ -15,7 +15,7 @@ use RouteForge\Laravel\Cache\RouteCache;
  *   {
  *     "level": "admin",
  *     "routes": {
- *       "admin.users.show": { "uri": "...", "methods": [...], "parameters": [...] }
+ *       "admin.users.show": { "uri": "...", "methods": [...], "parameters": [...], "parameter_defaults": {...} }
  *     }
  *   }
  */
@@ -33,7 +33,7 @@ readonly class RouteRepository
      *
      * @return array{
      *   level:string,
-     *   routes:array<string,array{uri:string,methods:string[],parameters:string[]}>
+     *   routes:array<string,array{uri:string,methods:string[],parameters:string[],parameter_defaults:array<string,mixed>}>
      * }
      */
     public function getRoutesByLevel(string $level): array
@@ -59,9 +59,10 @@ readonly class RouteRepository
                 continue;
             }
             $routes[$name] = [
-                'uri'        => $route->uri(),
-                'methods'    => $route->methods(),
-                'parameters' => $route->parameterNames(),
+                'uri'                => $route->uri(),
+                'methods'            => $route->methods(),
+                'parameters'         => $route->parameterNames(),
+                'parameter_defaults' => (object)$route->defaults,
             ];
         }
 
@@ -108,7 +109,7 @@ readonly class RouteRepository
      * @return array{
      *   levels: array<string,array{description:string,load:string,route_count:int,route:array{uri:string,methods:string[]}}>,
      *   config: array{strict_mode:bool,endpoint_prefix:string,cache_ttl:int|null},
-     *   unassigned: array<int,array{name:string,uri:string,methods:string[],parameters:string[]}>
+     *   unassigned: array<int,array{name:string,uri:string,methods:string[],parameters:string[],parameter_defaults:array<string,mixed>}>
      * }
      */
     public function getSummary(): array
@@ -183,7 +184,7 @@ readonly class RouteRepository
      * 当 fallback_level=null 时，tierResolver->resolve() 返回 null 的命名路由
      * 即为"未分配"。fallback_level 非 null 时所有路由都有层级，返回空数组。
      *
-     * @return array<int,array{name:string,uri:string,methods:string[],parameters:string[]}>
+     * @return array<int,array{name:string,uri:string,methods:string[],parameters:string[],parameter_defaults:array<string,mixed>}>
      */
     public function getUnassignedRoutes(): array
     {
@@ -206,10 +207,11 @@ readonly class RouteRepository
             $resolved = $this->tierResolver->resolve($route);
             if ($resolved === null) {
                 $unassigned[] = [
-                    'name'       => $name,
-                    'uri'        => $route->uri(),
-                    'methods'    => $route->methods(),
-                    'parameters' => $route->parameterNames(),
+                    'name'               => $name,
+                    'uri'                => $route->uri(),
+                    'methods'            => $route->methods(),
+                    'parameters'         => $route->parameterNames(),
+                    'parameter_defaults' => (object)$route->defaults,
                 ];
             }
         }

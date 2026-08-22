@@ -151,4 +151,53 @@ class TypesCommandTest extends TestCase
 
         @unlink($outPath);
     }
+
+    public function test_dts_marks_params_with_defaults_as_optional(): void
+    {
+        // URL 可选参数 {page?} 带默认值 → TS 应标记 ?
+        \Illuminate\Support\Facades\Route::get('/admin/posts/{page?}', static function () {})
+                                         ->name('admin.posts.index')
+                                         ->tier('admin')
+                                         ->defaults('page', '1');
+
+        [$exit, $out] = $this->runTypes(['--level' => 'admin']);
+
+        $this->assertSame(0, $exit);
+        // page 在 URL 中是 {page?}（可选），应标记 ?
+        $this->assertStringContainsString('page?: string | number;', $out);
+    }
+
+    public function test_dts_required_param_with_default_not_marked_optional(): void
+    {
+        // 必选参数 {user} 设置了默认值 → TS 不应标记 ?（URL 中必须提供）
+        \Illuminate\Support\Facades\Route::get('/admin/users/{user}/posts', static function () {})
+                                         ->name('admin.user.posts')
+                                         ->tier('admin')
+                                         ->defaults('user', 'guest');
+
+        [$exit, $out] = $this->runTypes(['--level' => 'admin']);
+
+        $this->assertSame(0, $exit);
+        // user 在 URL 中是 {user}（必选），即使有默认值也不标记 ?
+        $this->assertStringContainsString('user: string | number;', $out);
+        $this->assertStringNotContainsString('user?:', $out);
+    }
+
+    public function test_json_output_includes_parameter_defaults(): void
+    {
+        \Illuminate\Support\Facades\Route::get('/admin/posts/{page?}', static function () {})
+                                         ->name('admin.posts.index')
+                                         ->tier('admin')
+                                         ->defaults('page', '1');
+
+        [$exit, $out] = $this->runTypes(['--level' => 'admin', '--json' => true]);
+
+        $this->assertSame(0, $exit);
+        $decoded = json_decode($out, true);
+        $this->assertIsArray($decoded);
+
+        $route = $decoded['admin']['admin.posts.index'];
+        $this->assertArrayHasKey('parameter_defaults', $route);
+        $this->assertSame(['page' => '1'], $route['parameter_defaults']);
+    }
 }
