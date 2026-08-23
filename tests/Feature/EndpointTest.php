@@ -174,7 +174,7 @@ class EndpointTest extends TestCase
         $response->assertStatus(200);
         $response->assertJsonStructure([
             'levels' => ['public', 'client', 'manage', 'admin'],
-            'config' => ['strict_mode', 'endpoint_prefix', 'cache_ttl'],
+            'config' => ['strict_mode', 'endpoint_prefix', 'url_prefix', 'cache_ttl'],
             'unassigned',
         ]);
 
@@ -214,6 +214,7 @@ class EndpointTest extends TestCase
         // config 摘要
         $this->assertFalse($payload['config']['strict_mode']);
         $this->assertSame('/_forge/routes', $payload['config']['endpoint_prefix']);
+        $this->assertNull($payload['config']['url_prefix']);
         $this->assertSame(3600, $payload['config']['cache_ttl']);
     }
 
@@ -254,6 +255,49 @@ class EndpointTest extends TestCase
         $response->assertStatus(200);
         $payload = $response->json();
         $this->assertSame([], $payload['unassigned']);
+    }
+
+    public function test_summary_endpoint_url_prefix_null_by_default(): void
+    {
+        $response = $this->get($this->summaryEndpoint());
+
+        $response->assertStatus(200);
+        $payload = $response->json();
+        $this->assertArrayHasKey('url_prefix', $payload['config']);
+        $this->assertNull($payload['config']['url_prefix']);
+    }
+
+    public function test_summary_endpoint_url_prefix_with_full_url(): void
+    {
+        config()->set('forge.url_prefix', 'https://api.example.com/v1');
+
+        $response = $this->get($this->summaryEndpoint());
+
+        $response->assertStatus(200);
+        $payload = $response->json();
+        $this->assertSame('https://api.example.com/v1', $payload['config']['url_prefix']);
+    }
+
+    public function test_summary_endpoint_url_prefix_with_path_only(): void
+    {
+        config()->set('forge.url_prefix', '/api/v1');
+
+        $response = $this->get($this->summaryEndpoint());
+
+        $response->assertStatus(200);
+        $payload = $response->json();
+        $this->assertSame('/api/v1', $payload['config']['url_prefix']);
+    }
+
+    public function test_summary_endpoint_url_prefix_empty_string_returns_null(): void
+    {
+        config()->set('forge.url_prefix', '');
+
+        $response = $this->get($this->summaryEndpoint());
+
+        $response->assertStatus(200);
+        $payload = $response->json();
+        $this->assertNull($payload['config']['url_prefix']);
     }
 
     public function test_endpoint_returns_parameter_defaults_empty_when_no_defaults(): void

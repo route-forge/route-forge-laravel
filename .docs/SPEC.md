@@ -347,6 +347,7 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
   "config": {
     "strict_mode": false,
     "endpoint_prefix": "/_forge/routes",
+    "url_prefix": "https://api.example.com/v1",
     "cache_ttl": 3600
   },
   "unassigned": [
@@ -367,7 +368,10 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
 字段说明：
 
 + `levels`：各层级摘要。`description` 层级描述、`load` 加载策略（eager/lazy）、`route_count` 该层级路由数量、`route` 该层级元信息端点的请求信息（`uri` + `methods`），前端可据此直接构造请求获取该层级的全量路由数据。
-+ `config`：后端全局配置摘要。前端初始化时读取此字段作为最高优先级配置源（见 §5.3 分级覆盖策略）。当前包含 `strict_mode`、`endpoint_prefix` 和 `cache_ttl`，后续版本可扩展。
++ `config`：后端全局配置摘要。前端初始化时读取此字段作为最高优先级配置源（见 §5.3 分级覆盖策略）。当前包含
+  `strict_mode`、`endpoint_prefix`、`url_prefix` 和 `cache_ttl`，后续版本可扩展。
+  - `url_prefix`：应用的路由前缀，支持两种格式——完整 URL（含协议和域名，如
+    `https://api.example.com/v1`）或仅路径前缀（如 `/api/v1`）。未配置时为 `null`，前端视为无前缀。
 + `unassigned`：当 `fallback_level=null`
   时，所有未分配层级的命名路由列表。包含完整的路由元信息（name/uri/methods/parameters/parameter_defaults），前端可按需加载和调用。fallback_level
   非 null 时此字段为空数组。
@@ -570,9 +574,10 @@ php artisan route:forge:clear --level=admin
 | `levels.{name}.match.middleware`       | `string[]`                   | `[]`               | 中间件匹配列表，匹配逻辑受 `middleware_match` 控制                                                                                                                     |
 | `levels.{name}.match.middleware_match` | `string\|array`              | `'any'`            | 中间件匹配模式：`'any'`（OR）/ `'all'`（AND）/ DNF 数组（见 §3.1.2 中间件匹配模式）                                                                                    |
 | `levels.{name}.load`                   | `'eager'\|'lazy'`            | `'lazy'`           | 是否在摘要端点中标记为「前端应预加载」；前端自动发现时据此决定预加载策略                                                                                               |
-| `levels.{name}.endpoint_middleware`    | `string[]\|null`             | `[]`               | 访问该层级元信息端点（`GET /{endpoint_prefix}/{level}`）时要求的中间件列表；未配置或空数组则不限制                                                                         |
+| `levels.{name}.endpoint_middleware`    | `string[]\|null`             | `[]`               | 访问该层级元信息端点（`GET /{endpoint_prefix}/{level}`）时要求的中间件列表；未配置或空数组则不限制                                                                     |
 | `endpoint_prefix`                      | `string`                     | `'/_forge/routes'` | 路由元信息对外端点前缀（同时用于层级端点和摘要端点）                                                                                                                   |
-| `endpoint_middleware`                  | `string[]`                   | `[]`               | 摘要端点（`GET /{endpoint_prefix}`）中间件；空数组或 null 不限制                                                                                                     |
+| `url_prefix`                           | `string\|null`               | `null`             | 应用的路由前缀，通过摘要端点 `config.url_prefix` 下发。支持完整 URL（含协议域名）或仅路径前缀；`null` 或空字符串 = 不下发                                              |
+| `endpoint_middleware`                  | `string[]`                   | `[]`               | 摘要端点（`GET /{endpoint_prefix}`）中间件；空数组或 null 不限制                                                                                                       |
 | `cache_ttl`                            | `int\|null`                  | `3600`             | 统一缓存 TTL（秒）；`null` 不缓存，`0` 永久缓存。同时作用于所有层级端点与摘要端点。⚠️ `0` 遵循 Laravel Cache TTL 惯例（永久），非 HTTP `Cache-Control: max-age=0` 含义 |
 | `cache_driver`                         | `string\|null`               | `null`             | 缓存驱动；`null` 用默认驱动，可指定 `redis`/`file`/`array` 等                                                                                                          |
 | `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 fallback/unassigned（false）                                                                                                |

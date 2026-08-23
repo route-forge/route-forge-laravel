@@ -108,7 +108,7 @@ readonly class RouteRepository
      *
      * @return array{
      *   levels: array<string,array{description:string,load:string,route_count:int,route:array{uri:string,methods:string[]}}>,
-     *   config: array{strict_mode:bool,endpoint_prefix:string,cache_ttl:int|null},
+     *   config: array{strict_mode:bool,endpoint_prefix:string,url_prefix:string|null,cache_ttl:int|null},
      *   unassigned: array<int,array{name:string,uri:string,methods:string[],parameters:string[],parameter_defaults:array<string,mixed>}>
      * }
      */
@@ -137,9 +137,11 @@ readonly class RouteRepository
         }
 
         // 全局配置摘要
+        $urlPrefix = config('forge.url_prefix');
         $config = [
             'strict_mode'     => config('forge.strict_mode', false),
             'endpoint_prefix' => (string)config('forge.endpoint_prefix', '/_forge/routes'),
+            'url_prefix' => is_string($urlPrefix) && $urlPrefix !== '' ? $urlPrefix : null,
             'cache_ttl'       => config('forge.cache_ttl'),
         ];
 
