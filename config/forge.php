@@ -30,8 +30,6 @@ return [
     |                              'lazy'     前端自动发现时据此决定预加载策略
     |   endpoint_middleware    string[]       访问该层级元信息端点时要求的中间件列表，未配置则不限制
     |                          |null
-    |   expose_unassigned      bool     false true = 摘要端点的 unassigned 字段返回所有未命中层级的命名路由
-    |                                         false = unassigned 始终返回空数组，避免增量项目路由泄露
     |
     */
     'levels'            => [
@@ -148,7 +146,8 @@ return [
     |--------------------------------------------------------------------------
     |
     | strict_mode=false 时生效。
-    | null   = 不兜底，未命中路由归入摘要端点的 unassigned 列表（见 SPEC §3.1.6）。
+    | null   = 不兜底，未命中路由归入 unassigned 特殊层级，
+    |          经 GET /{endpoint_prefix}/unassigned 获取（见 SPEC §3.1.6）。
     | 非 null = 未命中路由归入指定层级。
     |
     */
@@ -156,16 +155,15 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | 是否暴露未分配路由
+    | 摘要端点响应格式版本（schemeVersion）
     |--------------------------------------------------------------------------
     |
-    | true  = 摘要端点（GET /{prefix}）的 unassigned 字段返回所有未命中层级的命名路由。
-    | false = unassigned 始终返回空数组，避免增量项目中大量未定义 tier 的路由泄露。
-    |
-    | 默认 false。如需调试未分配路由，可临时开启或改用 route:forge:list --unassigned。
+    | 摘要端点（GET /{endpoint_prefix}）返回的响应格式版本号，
+    | 前端据此识别格式并做版本兼容。默认 1，后续迭代引入不兼容的
+    | 格式变更时递增。
     |
     */
-    'expose_unassigned' => env('FORGE_EXPOSE_UNASSIGNED', false),
+    'scheme_version'    => env('FORGE_SCHEME_VERSION', 1),
 
     /*
     |--------------------------------------------------------------------------

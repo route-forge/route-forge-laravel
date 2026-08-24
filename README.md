@@ -95,8 +95,9 @@ Route::middleware(['auth', 'admin'])->tier('admin')->prefix('admin')->group(func
 ### 前端拉取元信息
 
 ```
-GET /_forge/routes          # 所有层级摘要 + 全局配置 + unassigned 列表
-GET /_forge/routes/admin    # admin 层级下所有命名路由的元信息
+GET /_forge/routes              # 所有层级摘要（含 unassigned 特殊层级）+ 全局配置 + schemeVersion 格式版本
+GET /_forge/routes/admin        # admin 层级下所有命名路由的元信息
+GET /_forge/routes/unassigned   # 未分配路由的元信息（特殊层级，仅 fallback_level=null 时非空）
 ```
 
 ### Artisan 命令
@@ -122,7 +123,8 @@ php artisan route:forge:clear
 | `cache_ttl`       | `int\|null`      | `3600`             | 统一缓存 TTL（秒）；null 不缓存            |
 | `cache_driver`    | `string\|null`   | `null`             | 缓存驱动；null 使用默认驱动                 |
 | `strict_mode`     | `bool`           | `false`            | 未命中层级时抛异常（true）或走兜底（false） |
-| `fallback_level`  | `string\|null`   | `null`             | 兜底层级；null 时归入「未分配」分组         |
+| `fallback_level`  | `string\|null`   | `null`             | 兜底层级；null 时归入 unassigned 特殊层级 |
+| `scheme_version`  | `int`            | `1`                | 摘要端点响应格式版本（schemeVersion）     |
 | `classifier`      | `callable\|null` | `null`             | 自定义分类回调 `fn(Route $r): ?string`      |
 
 完整配置项参考见 [`.docs/SPEC.md` §5.1](./.docs/SPEC.md)。

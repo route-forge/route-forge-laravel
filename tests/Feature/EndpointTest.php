@@ -157,15 +157,12 @@ class EndpointTest extends TestCase
         $this->assertArrayNotHasKey('public.help', $secondRoutes);
     }
 
-    public function test_summary_endpoint_returns_levels_config_unassigned(): void
+    public function test_summary_endpoint_returns_scheme_version_levels_config(): void
     {
-        // 开启 expose_unassigned 以验证 unassigned 路由返回
-        config()->set('forge.expose_unassigned', true);
-
         RouteFacade::get('/admin/users', static function () {})
             ->name('admin.users.index')
             ->tier('admin');
-        // orphan 路由：不匹配任何层级 prefix/middleware，且无显式 tier
+        // orphan 路由：不匹配任何层级 prefix/middleware，且无显式 tier → 归入 unassigned 特殊层级
         RouteFacade::get('/orphan', static function () {})
             ->name('orphan');
 
@@ -173,23 +170,20 @@ class EndpointTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertJsonStructure([
-            'levels' => ['public', 'client', 'manage', 'admin'],
+            'schemeVersion',
+            'levels' => ['public', 'client', 'manage', 'admin', 'unassigned'],
             'config' => ['strict_mode', 'endpoint_prefix', 'url_prefix', 'cache_ttl'],
-            'unassigned',
         ]);
 
         $payload = $response->json();
-        $this->assertIsArray($payload['unassigned']);
 
-        // 每条 unassigned 路由结构（SPEC §3.1.6 unassigned 字段）
-        foreach ($payload['unassigned'] as $route) {
-            $this->assertArrayHasKey('name', $route);
-            $this->assertArrayHasKey('uri', $route);
-            $this->assertArrayHasKey('methods', $route);
-            $this->assertArrayHasKey('parameters', $route);
-        }
+        // schemeVersion：默认 1，用于后续迭代的格式兼容判断（SPEC §3.1.6）
+        $this->assertSame(1, $payload['schemeVersion']);
 
-        // levels 中每个层级应包含 description/load/route_count/route（端点自描述）
+        // 摘要不再内联返回 unassigned 路由列表，明细经 unassigned 层级端点另行获取
+        $this->assertArrayNotHasKey('unassigned', $payload);
+
+        // levels 中每个层级（含 unassigned 特殊层级）应包含 description/load/route_count/route
         foreach ($payload['levels'] as $levelName => $levelInfo) {
             $this->assertArrayHasKey('description', $levelInfo);
             $this->assertArrayHasKey('load', $levelInfo);
@@ -207,9 +201,10 @@ class EndpointTest extends TestCase
         // admin 层级 route_count 应为 1（仅 admin.users.index）
         $this->assertSame(1, $payload['levels']['admin']['route_count']);
 
-        // orphan 应出现在 unassigned 中（fallback_level=null 且 expose_unassigned=true）
-        $unassignedNames = array_column($payload['unassigned'], 'name');
-        $this->assertContains('orphan', $unassignedNames);
+        // unassigned 特殊层级摘要：结构与已定义层级一致，route_count 含 orphan（及 forge 自身端点路由）
+        $unassigned = $payload['levels']['unassigned'];
+        $this->assertSame('lazy', $unassigned['load']);
+        $this->assertGreaterThanOrEqual(1, $unassigned['route_count']);
 
         // config 摘要
         $this->assertFalse($payload['config']['strict_mode']);
@@ -218,43 +213,54 @@ class EndpointTest extends TestCase
         $this->assertSame(3600, $payload['config']['cache_ttl']);
     }
 
-    public function test_summary_endpoint_unassigned_empty_by_default(): void
+    public function test_summary_endpoint_scheme_version_follows_config(): void
     {
-        // 默认 expose_unassigned=false，unassigned 应返回空数组，避免路由泄露
+        config()->set('forge.scheme_version', 2);
+
+        $payload = $this->get($this->summaryEndpoint())->json();
+
+        $this->assertSame(2, $payload['schemeVersion']);
+    }
+
+    public function test_unassigned_level_endpoint_returns_unassigned_routes(): void
+    {
+        RouteFacade::get('/admin/users', static function () {})
+            ->name('admin.users.index')
+            ->tier('admin');
         RouteFacade::get('/orphan', static function () {})
             ->name('orphan');
 
-        $response = $this->get($this->summaryEndpoint());
+        $response = $this->get($this->endpoint('unassigned'));
 
         $response->assertStatus(200);
         $payload = $response->json();
-        $this->assertSame([], $payload['unassigned']);
+        $this->assertSame('unassigned', $payload['level']);
+
+        // orphan 归入 unassigned；已分配层级的路由不出现（避免路由泄露到错误层级）
+        $this->assertArrayHasKey('orphan', $payload['routes']);
+        $this->assertArrayNotHasKey('admin.users.index', $payload['routes']);
+
+        // 条目结构与已定义层级端点一致（按路由名索引，无冗余 name 字段）
+        $route = $payload['routes']['orphan'];
+        $this->assertSame('orphan', $route['uri']);
+        $this->assertSame(['GET', 'HEAD'], $route['methods']);
+        $this->assertSame([], $route['parameters']);
+        $this->assertArrayHasKey('parameter_defaults', $route);
     }
 
-    public function test_summary_endpoint_unassigned_returned_when_expose_enabled(): void
-    {
-        config()->set('forge.expose_unassigned', true);
-
-        RouteFacade::get('/orphan', static function () {})
-            ->name('orphan');
-
-        $response = $this->get($this->summaryEndpoint());
-
-        $response->assertStatus(200);
-        $payload = $response->json();
-        $unassignedNames = array_column($payload['unassigned'], 'name');
-        $this->assertContains('orphan', $unassignedNames);
-    }
-
-    public function test_summary_endpoint_unassigned_is_empty_when_fallback_level_set(): void
+    public function test_unassigned_level_empty_when_fallback_level_set(): void
     {
         config(['forge.fallback_level' => 'public']);
 
-        $response = $this->get($this->summaryEndpoint());
+        RouteFacade::get('/orphan', static function () {})
+            ->name('orphan');
 
-        $response->assertStatus(200);
-        $payload = $response->json();
-        $this->assertSame([], $payload['unassigned']);
+        // fallback_level 非 null 时所有路由都有层级，unassigned 特殊层级为空
+        $summary = $this->get($this->summaryEndpoint())->json();
+        $this->assertSame(0, $summary['levels']['unassigned']['route_count']);
+
+        $routes = $this->get($this->endpoint('unassigned'))->json('routes');
+        $this->assertSame([], $routes);
     }
 
     public function test_summary_endpoint_url_prefix_null_by_default(): void
@@ -328,26 +334,16 @@ class EndpointTest extends TestCase
         $this->assertSame(['page' => '1'], $route['parameter_defaults']);
     }
 
-    public function test_summary_endpoint_unassigned_includes_parameter_defaults(): void
+    public function test_unassigned_level_endpoint_includes_parameter_defaults(): void
     {
-        config()->set('forge.expose_unassigned', true);
-
         RouteFacade::get('/items/{page?}', static function () {})
                    ->name('items.index')
                    ->defaults('page', '1');
 
-        $payload = $this->get($this->summaryEndpoint())->json();
-        // 按路由名查找 items.index（unassigned 中可能包含 forge 自身端点路由）
-        $itemsRoute = null;
-        foreach ($payload['unassigned'] as $route) {
-            if (($route['name'] ?? '') === 'items.index') {
-                $itemsRoute = $route;
-                break;
-            }
-        }
+        $routes = $this->get($this->endpoint('unassigned'))->json('routes');
 
-        $this->assertNotNull($itemsRoute, 'items.index should be in unassigned');
-        $this->assertArrayHasKey('parameter_defaults', $itemsRoute);
-        $this->assertSame(['page' => '1'], $itemsRoute['parameter_defaults']);
+        $this->assertArrayHasKey('items.index', $routes);
+        $this->assertArrayHasKey('parameter_defaults', $routes['items.index']);
+        $this->assertSame(['page' => '1'], $routes['items.index']['parameter_defaults']);
     }
 }

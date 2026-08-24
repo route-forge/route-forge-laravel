@@ -21,6 +21,18 @@ use RouteForge\Laravel\Cache\RouteCache;
  */
 readonly class RouteRepository
 {
+    /**
+     * 特殊层级名：未命中任何层级的命名路由归属此层级（仅 fallback_level=null 时存在），
+     * 通过与已定义层级相同的端点格式获取：GET /{endpoint_prefix}/unassigned
+     */
+    public const UNASSIGNED_LEVEL = 'unassigned';
+
+    /**
+     * 摘要端点响应格式版本（schemeVersion 字段）。
+     * 后续迭代引入不兼容的格式变更时递增，前端据此做版本兼容。
+     */
+    public const SCHEME_VERSION = 1;
+
     public function __construct(
         private Router       $router,
         private TierResolver $tierResolver,
@@ -31,6 +43,9 @@ readonly class RouteRepository
     /**
      * 取某层级下所有命名路由的元信息（带缓存）。
      *
+     * level 支持特殊值 unassigned：返回所有未命中层级的命名路由，
+     * 响应结构与已定义层级完全一致（fallback_level 非 null 时 routes 为空）。
+     *
      * @return array{
      *   level:string,
      *   routes:array<string,array{uri:string,methods:string[],parameters:string[],parameter_defaults:array<string,mixed>}>
@@ -38,7 +53,8 @@ readonly class RouteRepository
      */
     public function getRoutesByLevel(string $level): array
     {
-        if (!isset($this->levelsConfig[$level])) {
+        $isUnassigned = $level === self::UNASSIGNED_LEVEL;
+        if (!$isUnassigned && !isset($this->levelsConfig[$level])) {
             throw new Exceptions\UnknownLevelException("Unknown level: $level");
         }
 
@@ -47,23 +63,28 @@ readonly class RouteRepository
             return $cached;
         }
 
-        $routes = [];
-        foreach ($this->router->getRoutes() as $route) {
-            /** @var Route $route */
-            $name = $route->getName();
-            if ($name === null) {
-                continue; // 未命名路由不出现在元信息里
+        if ($isUnassigned) {
+            // unassigned 特殊层级：数据源为未命中任何层级的命名路由（按路由名索引）
+            $routes = $this->getUnassignedRoutes();
+        } else {
+            $routes = [];
+            foreach ($this->router->getRoutes() as $route) {
+                /** @var Route $route */
+                $name = $route->getName();
+                if ($name === null) {
+                    continue; // 未命名路由不出现在元信息里
+                }
+                $resolved = $this->tierResolver->resolve($route);
+                if ($resolved !== $level) {
+                    continue;
+                }
+                $routes[$name] = [
+                    'uri'                => $route->uri(),
+                    'methods'            => $route->methods(),
+                    'parameters'         => $route->parameterNames(),
+                    'parameter_defaults' => (object)$route->defaults,
+                ];
             }
-            $resolved = $this->tierResolver->resolve($route);
-            if ($resolved !== $level) {
-                continue;
-            }
-            $routes[$name] = [
-                'uri'                => $route->uri(),
-                'methods'            => $route->methods(),
-                'parameters'         => $route->parameterNames(),
-                'parameter_defaults' => (object)$route->defaults,
-            ];
         }
 
         $payload = [
@@ -87,7 +108,7 @@ readonly class RouteRepository
      * 失效指定层级缓存；不传参失效全部。
      *
      * 摘要端点缓存（route-forge:summary）也需一并失效，
-     * 因为 levels 概览的 route_count 与 unassigned 列表均依赖路由表。
+     * 因为 levels 概览的 route_count（含 unassigned 特殊层级）依赖路由表。
      */
     public function invalidate(?string $level = null): void
     {
@@ -101,15 +122,19 @@ readonly class RouteRepository
     }
 
     /**
-     * 摘要端点响应（SPEC §3.1.6）：返回所有层级概览、全局配置、未分配路由列表。
+     * 摘要端点响应（SPEC §3.1.6）：返回格式版本（schemeVersion）、
+     * 所有层级概览（含 unassigned 特殊层级）与全局配置。
+     *
+     * unassigned 路由明细不在摘要中内联返回，前端按摘要中 unassigned 层级
+     * 的 route 字段另行请求 GET /{endpoint_prefix}/unassigned 获取。
      *
      * 缓存策略：TTL 由 RouteCache 构造函数统一控制（config('forge.cache_ttl')）。
      * 缓存 key：route-forge:summary
      *
      * @return array{
+     *   schemeVersion: int,
      *   levels: array<string,array{description:string,load:string,route_count:int,route:array{uri:string,methods:string[]}}>,
-     *   config: array{strict_mode:bool,endpoint_prefix:string,url_prefix:string|null,cache_ttl:int|null},
-     *   unassigned: array<int,array{name:string,uri:string,methods:string[],parameters:string[],parameter_defaults:array<string,mixed>}>
+     *   config: array{strict_mode:bool,endpoint_prefix:string,url_prefix:string|null,cache_ttl:int|null}
      * }
      */
     public function getSummary(): array
@@ -136,6 +161,17 @@ readonly class RouteRepository
             ];
         }
 
+        // unassigned 特殊层级：与已定义层级结构一致，明细经其层级端点另行获取
+        $levelsSummary[self::UNASSIGNED_LEVEL] = [
+            'description' => '未命中任何层级的路由（fallback_level=null）',
+            'load'        => 'lazy',
+            'route_count' => count($this->getUnassignedRoutes()),
+            'route'       => [
+                'uri'     => "{$endpointPrefix}/" . self::UNASSIGNED_LEVEL,
+                'methods' => ['GET', 'HEAD'],
+            ],
+        ];
+
         // 全局配置摘要
         $urlPrefix = config('forge.url_prefix');
         $config = [
@@ -145,13 +181,10 @@ readonly class RouteRepository
             'cache_ttl'       => config('forge.cache_ttl'),
         ];
 
-        // unassigned：fallback_level=null 时列出所有未命中层级的命名路由
-        $unassigned = $this->getUnassignedRoutes();
-
         $payload = [
-            'levels'     => $levelsSummary,
-            'config'     => $config,
-            'unassigned' => $unassigned,
+            'schemeVersion' => (int) config('forge.scheme_version', self::SCHEME_VERSION),
+            'levels'        => $levelsSummary,
+            'config'        => $config,
         ];
 
         $this->cache->set('summary', $payload);
@@ -181,22 +214,17 @@ readonly class RouteRepository
     }
 
     /**
-     * 未分配层级的路由列表（SPEC §3.1.6 unassigned 字段）。
+     * unassigned 特殊层级的路由元信息（按路由名索引，与层级端点 routes 结构一致）。
      *
      * 当 fallback_level=null 时，tierResolver->resolve() 返回 null 的命名路由
      * 即为"未分配"。fallback_level 非 null 时所有路由都有层级，返回空数组。
      *
-     * @return array<int,array{name:string,uri:string,methods:string[],parameters:string[],parameter_defaults:array<string,mixed>}>
+     * @return array<string,array{uri:string,methods:string[],parameters:string[],parameter_defaults:array<string,mixed>}>
      */
     public function getUnassignedRoutes(): array
     {
         $fallback = config('forge.fallback_level');
         if ($fallback !== null) {
-            return [];
-        }
-
-        // expose_unassigned=false（默认）时不返回未分配路由，避免增量项目路由泄露
-        if (!config('forge.expose_unassigned', false)) {
             return [];
         }
 
@@ -206,10 +234,8 @@ readonly class RouteRepository
             if ($name === null) {
                 continue;
             }
-            $resolved = $this->tierResolver->resolve($route);
-            if ($resolved === null) {
-                $unassigned[] = [
-                    'name'               => $name,
+            if ($this->tierResolver->resolve($route) === null) {
+                $unassigned[$name] = [
                     'uri'                => $route->uri(),
                     'methods'            => $route->methods(),
                     'parameters'         => $route->parameterNames(),

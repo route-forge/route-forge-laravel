@@ -67,12 +67,13 @@ class TypesCommandTest extends TestCase
         [$exit, $out] = $this->runTypes();
 
         $this->assertSame(0, $exit);
-        $this->assertStringContainsString('export interface ForgeRoutes', $out);
+        $this->assertStringContainsString('declare module \'@route-forge/core\'', $out);
+        $this->assertStringContainsString('interface ForgeRouteMap {', $out);
         $this->assertStringContainsString('// AUTO-GENERATED', $out);
         $this->assertStringContainsString('// 生成时间:', $out);
         $this->assertStringContainsString('export type ForgeLevel =', $out);
         $this->assertStringContainsString('export type ForgeRouteName<L extends ForgeLevel>', $out);
-        $this->assertStringContainsString('export interface ForgeRouteMeta', $out);
+        $this->assertStringContainsString('export type ForgeRoutes = ForgeRouteMap;', $out);
         // 二级结构：层级 → 路由名
         $this->assertStringContainsString('admin: {', $out);
         $this->assertStringContainsString('client: {', $out);
@@ -145,7 +146,7 @@ class TypesCommandTest extends TestCase
 
         $this->assertFileExists($outPath);
         $content = (string) file_get_contents($outPath);
-        $this->assertStringContainsString('export interface ForgeRoutes', $content);
+        $this->assertStringContainsString('interface ForgeRouteMap {', $content);
         $this->assertStringContainsString('admin: {', $content);
         $this->assertStringContainsString("method: 'POST';", $content);
 

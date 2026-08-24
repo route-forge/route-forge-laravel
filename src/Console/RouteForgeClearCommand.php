@@ -6,6 +6,7 @@ namespace RouteForge\Laravel\Console;
 
 use Illuminate\Console\Command;
 use RouteForge\Laravel\Cache\RouteCache;
+use RouteForge\Laravel\RouteRepository;
 
 /**
  * 清除 Route Forge 路由元信息缓存
@@ -23,7 +24,9 @@ class RouteForgeClearCommand extends Command
         $level = $this->option('level');
 
         if ($level !== null && $level !== '') {
-            $levels = array_keys(config('forge.levels', []));
+            // 已定义层级 + unassigned 特殊层级（其端点缓存独立存储）
+            $levels   = array_keys(config('forge.levels', []));
+            $levels[] = RouteRepository::UNASSIGNED_LEVEL;
             if (!in_array($level, $levels, true)) {
                 $this->error("Unknown level: {$level}");
                 $this->line('Available levels: ' . (empty($levels) ? '(none)' : implode(', ', $levels)));

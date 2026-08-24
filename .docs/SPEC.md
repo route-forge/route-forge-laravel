@@ -212,12 +212,13 @@ Route::group(['tier' => 'admin'], function () {
 2. **`Route::group`** **的** **`tier`** **选项**（继承自最近一层 group，内层覆盖外层）
 3. **`classifier`** **自定义回调**返回非 null 值
 4. **配置文件** **`match`** **规则**匹配（受 `middleware_match` 控制）
-5. **兜底**：`fallback_level` 非 null 时归入指定层级；`fallback_level=null` 时归入「未分配」分组（可通过摘要端点 §3.1.6 获取）
+5. **兜底**：`fallback_level` 非 null 时归入指定层级；`fallback_level=null` 时归入 `unassigned` 特殊层级（经层级端点获取，见 §3.1.5 / §3.1.6）
 
 > 优先级设计意图：显式标注胜过隐式分组，分组胜过全局规则，全局规则胜过兜底。`fallback_level=null`
-> 的设计允许项目不做兜底分配——未标记路由仍可被前端调用，只是需要通过摘要端点的 `unassigned` 字段发现。
+> 的设计允许项目不做兜底分配——未标记路由仍可被前端调用，只是需要通过摘要端点中的 `unassigned` 特殊层级发现，
+> 并经其层级端点（`GET /{endpoint_prefix}/unassigned`）获取明细。
 >
-> ⚠️ 安全考量：`fallback_level=null` 时未标记路由会通过摘要端点暴露路由名和 URI 模板。生产环境建议配合 `strict_mode=true`
+> ⚠️ 安全考量：`fallback_level=null` 时未标记路由会通过 `unassigned` 层级端点暴露路由名和 URI 模板。生产环境建议配合 `strict_mode=true`
 > 或显式标记所有路由，避免信息泄露。
 
 #### 3.1.5 层级元信息查询端点
@@ -227,6 +228,8 @@ Route::group(['tier' => 'admin'], function () {
 ```
 GET /_forge/routes/{level}   # 返回该层级下所有命名路由的元信息
 ```
+
+`{level}` 支持特殊值 `unassigned`：返回所有未命中任何层级的命名路由，响应结构与已定义层级完全一致。仅 `fallback_level=null` 时存在未分配路由；`fallback_level` 非 null 时 `routes` 为空对象。
 
 返回示例：
 
@@ -306,6 +309,7 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
 
 ```json
 {
+  "schemeVersion": 1,
   "levels": {
     "public": {
       "description": "公共接口（无需登录）",
@@ -342,6 +346,15 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
         "uri": "/_forge/routes/admin",
         "methods": ["GET", "HEAD"]
       }
+    },
+    "unassigned": {
+      "description": "未命中任何层级的路由（fallback_level=null）",
+      "load": "lazy",
+      "route_count": 1,
+      "route": {
+        "uri": "/_forge/routes/unassigned",
+        "methods": ["GET", "HEAD"]
+      }
     }
   },
   "config": {
@@ -349,32 +362,19 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
     "endpoint_prefix": "/_forge/routes",
     "url_prefix": "https://api.example.com/v1",
     "cache_ttl": 3600
-  },
-  "unassigned": [
-    {
-      "name": "debug.info",
-      "uri": "_debug/info",
-      "methods": [
-        "GET",
-        "HEAD"
-      ],
-      "parameters": [],
-      "parameter_defaults": {}
-    }
-  ]
+  }
 }
 ```
 
 字段说明：
 
++ `schemeVersion`：摘要端点响应格式版本号，默认 `1`。后续迭代引入不兼容的格式变更时递增，前端应据此字段识别格式版本并做兼容处理。
 + `levels`：各层级摘要。`description` 层级描述、`load` 加载策略（eager/lazy）、`route_count` 该层级路由数量、`route` 该层级元信息端点的请求信息（`uri` + `methods`），前端可据此直接构造请求获取该层级的全量路由数据。
+  - `unassigned`：特殊层级，与已定义层级结构完全一致，汇总所有未命中任何层级的命名路由（仅 `fallback_level=null` 时 `route_count` 可能大于 0）。其路由明细不在摘要中内联返回，前端按 `route` 字段另行请求 `GET /{endpoint_prefix}/unassigned` 获取（见 §3.1.5）。
 + `config`：后端全局配置摘要。前端初始化时读取此字段作为最高优先级配置源（见 §5.3 分级覆盖策略）。当前包含
   `strict_mode`、`endpoint_prefix`、`url_prefix` 和 `cache_ttl`，后续版本可扩展。
   - `url_prefix`：应用的路由前缀，支持两种格式——完整 URL（含协议和域名，如
     `https://api.example.com/v1`）或仅路径前缀（如 `/api/v1`）。未配置时为 `null`，前端视为无前缀。
-+ `unassigned`：当 `fallback_level=null`
-  时，所有未分配层级的命名路由列表。包含完整的路由元信息（name/uri/methods/parameters/parameter_defaults），前端可按需加载和调用。fallback_level
-  非 null 时此字段为空数组。
 
 摘要端点同样受 `cache_driver` 与 `cache_ttl` 控制缓存。
 
@@ -581,7 +581,8 @@ php artisan route:forge:clear --level=admin
 | `cache_ttl`                            | `int\|null`                  | `3600`             | 统一缓存 TTL（秒）；`null` 不缓存，`0` 永久缓存。同时作用于所有层级端点与摘要端点。⚠️ `0` 遵循 Laravel Cache TTL 惯例（永久），非 HTTP `Cache-Control: max-age=0` 含义 |
 | `cache_driver`                         | `string\|null`               | `null`             | 缓存驱动；`null` 用默认驱动，可指定 `redis`/`file`/`array` 等                                                                                                          |
 | `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 fallback/unassigned（false）                                                                                                |
-| `fallback_level`                       | `string\|null`               | `null`             | 兜底层级名；`null` 时未命中路由归入「未分配」分组（可通过摘要端点 §3.1.6 获取）；非 null 则归入指定层级                                                                |
+| `fallback_level`                       | `string\|null`               | `null`             | 兜底层级名；`null` 时未命中路由归入 `unassigned` 特殊层级（经 `GET /{endpoint_prefix}/unassigned` 获取，见 §3.1.6）；非 null 则归入指定层级              |
+| `scheme_version`                       | `int`                        | `1`                | 摘要端点返回的响应格式版本号（`schemeVersion` 字段）；后续迭代引入不兼容的格式变更时递增，前端据此做版本兼容                                                             |
 | `classifier`                           | `callable\|null`             | `null`             | 自定义分类回调，签名 `fn(Route $r): ?string`，返回层级名或 null。返回的层级名必须在 `levels` 配置中存在，否则抛 `UnknownClassifierTierException`                       |
 
 ## 6. 错误码
