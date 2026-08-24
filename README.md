@@ -27,7 +27,8 @@ Route Forge 后端提供多种互相兼容的路由层级（tier）分配方式�
 - **摘要端点** `GET /_forge/routes`：返回所有层级概览、全局配置与未分配路由列表，供前端初始化自动发现；
 - **统一缓存**：所有层级端点与摘要端点共享同一 TTL 配置，`cache_driver` 可指定驱动；开发模式（`APP_DEBUG=true`）自动跳过缓存；
 - **Artisan 命令**：`route:forge:list` 查看层级分配结果、`route:forge:types` 生成 TS 类型声明；
-- **严格模式**：`strict_mode=true` 时未命中层级抛 `RouteTierNotAssignedException`。
+- **严格模式**：`strict_mode=true` 时未命中层级抛 `RouteTierNotAssignedException`；
+- **管理器页面**：开发环境（`APP_DEBUG=true`）专属的可视化路由管理面板，支持层级总览、路由搜索/过滤、配置编辑。
 
 ## 环境要求
 
@@ -132,6 +133,16 @@ php artisan route:forge:clear
 ### 开发模式
 
 当 `APP_DEBUG=true`（Laravel 默认的开发环境配置）时，Route Forge 自动跳过所有缓存读写操作，路由变更即时生效，无需手动清除缓存。生产环境（`APP_DEBUG=false`）下统一使用 `cache_ttl` 配置控制缓存。
+
+### 管理器页面
+
+开发环境下可访问可视化路由管理面板 `GET /_forge/manager`，提供：
+
+- **总览**：各层级路由数量卡片，点击快速过滤
+- **路由**：全量路由表格，支持搜索、按层级/HTTP 方法过滤、点击查看详情
+- **配置**：编辑全局设置与 levels 层级配置，保存后直接写入 `config/forge.php`
+
+> ⚠️ 仅 `APP_DEBUG=true` 时可用，生产环境不注册任何管理器路由。
 
 ## 开发
 

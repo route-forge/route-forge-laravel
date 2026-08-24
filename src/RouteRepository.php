@@ -220,6 +220,53 @@ readonly class RouteRepository
     }
 
     /**
+     * 获取所有命名路由及其层级分配结果（管理器页面专用，不缓存）。
+     *
+     * 一次遍历收集所有路由的元信息与层级归属，供管理器页面按层级分组展示、
+     * 搜索过滤与详情查看。
+     *
+     * @return array{routes: list<array{name:string,uri:string,methods:string[],parameters:string[],parameter_defaults:array<string,mixed>,middleware:string[],tier:string}>,
+     *                       tiers: array<string,int>}
+     */
+    public function getAllRoutesWithTiers(): array
+    {
+        $routes = [];
+        $tiers  = [];
+
+        foreach ($this->router->getRoutes() as $route) {
+            /** @var Route $route */
+            $name = $route->getName();
+            if ($name === null || $name === '') {
+                continue;
+            }
+            // 跳过 forge 自身端点路由
+            if (str_starts_with($name, 'forge.routes.') || str_starts_with($name,
+                    'forge.manager')) {
+                continue;
+            }
+
+            $resolved     = $this->tierResolver->resolve($route);
+            $tier         = $resolved ?? self::UNASSIGNED_LEVEL;
+            $tiers[$tier] = ($tiers[$tier] ?? 0) + 1;
+
+            $routes[] = [
+                'name'               => $name,
+                'uri'                => $route->uri(),
+                'methods'            => array_values(array_filter(
+                    $route->methods(),
+                    fn(string $m) => strtoupper($m) !== 'HEAD',
+                )),
+                'parameters'         => $route->parameterNames(),
+                'parameter_defaults' => (array)$route->defaults,
+                'middleware'         => $route->gatherMiddleware(),
+                'tier'               => $tier,
+            ];
+        }
+
+        return ['routes' => $routes, 'tiers' => $tiers];
+    }
+
+    /**
      * unassigned 特殊层级的路由元信息（按路由名索引，与层级端点 routes 结构一致）。
      *
      * 当 fallback_level=null 时，tierResolver->resolve() 返回 null 的命名路由

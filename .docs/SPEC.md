@@ -597,6 +597,37 @@ php artisan route:forge:clear --level=admin
 - 开发模式（`APP_DEBUG=true`）下缓存本就不写入，执行此命令无实际效果但不会报错。
 - 联动清除：执行 Laravel 内置的 `php artisan route:clear` 时，自动连带清除 Route Forge 缓存（通过监听 `CommandStarting` 事件实现）。
 
+### 3.3 管理器页面（开发环境）
+
+仅在 `APP_DEBUG=true`（开发环境）下可用的可视化路由管理面板，提供：
+
+- **层级总览**：卡片式展示各层级路由数量、描述、加载策略（eager/lazy），点击卡片快速过滤
+- **路由列表**：表格展示所有命名路由的层级、方法、URI、中间件，支持搜索与按层级/HTTP 方法过滤
+- **层级详情**：点击路由名弹出模态框，展示完整元信息（参数、默认值、中间件等）
+- **配置编辑**：表单编辑全局设置（端点前缀、缓存 TTL、严格模式等），JSON 编辑器编辑 levels 层级配置，保存后直接写入
+  `config/forge.php`
+
+访问地址：
+
+```text
+GET /_forge/manager              # 管理器页面（HTML）
+GET /_forge/manager/api/routes   # 所有路由及层级分配（JSON）
+GET /_forge/manager/api/config   # 当前配置（JSON）
+PUT /_forge/manager/api/config   # 更新配置文件
+```
+
+行为说明：
+
+- **仅开发环境可用**：`APP_DEBUG=false` 时不注册任何管理器路由，零泄露风险。
+- 数据源与 Artisan 命令一致，直接从 Laravel 路由注册表读取，层级分配逻辑与运行时完全一致（遵循 §3.1.4
+  五级优先级）。
+- 配置保存会重新生成 `config/forge.php` 文件，并自动清除配置缓存使变更立即生效。
+- 表格区域限高（`max-height: calc(100vh - 240px)`），路由多时表格内部滚动，表头 sticky 吸顶。
+- 前端零构建依赖：Blade 视图 + 原生 CSS + 原生 JavaScript，无需 Node.js 构建流程。
+
+> 设计意图：开发阶段除了 Artisan
+> 命令行，开发者还需要一个更直观的可视化界面来理解路由层级分配、调试配置匹配规则、快速编辑配置。管理器页面填补了这一需求，同时严格限制为开发环境专属，不影响生产安全。
+
 ## 5. 配置项参考
 
 | 键                                     | 类型                         | 默认值             | 说明                                                                                                                                                                                              |
@@ -657,10 +688,11 @@ php artisan route:forge:clear --level=admin
 - ✅ `middleware_match`：支持 `any` / `all` / DNF 数组三种匹配模式
 - ✅ 统一缓存：所有层级端点与摘要端点共享同一 TTL 配置，支持多种缓存驱动
 - ✅ Artisan 命令：`route:forge:list` 查看层级分配结果、`route:forge:types` 生成 TS 类型声明、`route:forge:clear` 清除缓存
+- ✅ 管理器页面：开发环境专属的可视化路由管理面板（层级总览、路由搜索/过滤、配置编辑）
 
 ### 8.2 v1.x 路线图
 
-- v1.1：可视化路由管理面板（独立 SPA，连接 Route Forge 端点）
+- ✅ v1.1：可视化路由管理面板（Blade + 原生 JS，开发环境专属）
 - v1.2：OpenAPI 桥接（从 OpenAPI spec 生成 Route Forge 类型）
 - v1.3：Vite 插件（dev 时自动 codegen，HMR 同步路由变更）
 

@@ -18,6 +18,7 @@ use RouteForge\Laravel\Cache\RouteCache;
 use RouteForge\Laravel\Console\RouteForgeClearCommand;
 use RouteForge\Laravel\Console\RouteForgeListCommand;
 use RouteForge\Laravel\Console\RouteForgeTypesCommand;
+use RouteForge\Laravel\Http\ForgeManagerController;
 use RouteForge\Laravel\Http\RouteMetadataController;
 
 /**
@@ -54,6 +55,8 @@ class ForgeServiceProvider extends ServiceProvider
     {
         $this->registerTierMacro();
         $this->registerMetadataEndpoint();
+        $this->registerViewNamespace();
+        $this->registerManagerRoutes();
         $this->publishConfig();
         $this->listenRouteClear();
 
@@ -223,6 +226,47 @@ class ForgeServiceProvider extends ServiceProvider
         if (is_array($summaryMiddleware) && count($summaryMiddleware) > 0) {
             $summaryRoute->middleware($summaryMiddleware);
         }
+    }
+
+    /**
+     * 注册 Blade 视图命名空间 forge:: → resources/views/。
+     *
+     * 管理器页面使用 view('forge::manager') 渲染，
+     * 通过命名空间隔离避免与宿主项目的视图冲突。
+     */
+    protected function registerViewNamespace(): void
+    {
+        $this->loadViewsFrom(__DIR__ . '/../resources/views', 'forge');
+    }
+
+    /**
+     * 注册管理器页面路由（仅开发环境）。
+     *
+     * 管理器页面提供可视化路由管理面板，仅在 APP_DEBUG=true 时可用：
+     *   - GET  /_forge/manager          → HTML 面板
+     *   - GET  /_forge/manager/api/routes → 所有路由 JSON
+     *   - GET  /_forge/manager/api/config → 当前配置 JSON
+     *   - PUT  /_forge/manager/api/config → 更新配置文件
+     *
+     * 非开发环境不注册任何路由，确保零泄露风险。
+     */
+    protected function registerManagerRoutes(): void
+    {
+        if (!config('app.debug', false)) {
+            return;
+        }
+
+        $router = $this->app['router'];
+        $prefix = '/_forge/manager';
+
+        $router->get($prefix, [ForgeManagerController::class, 'index'])
+               ->name('forge.manager.index');
+        $router->get("{$prefix}/api/routes", [ForgeManagerController::class, 'routes'])
+               ->name('forge.manager.api.routes');
+        $router->get("{$prefix}/api/config", [ForgeManagerController::class, 'config'])
+               ->name('forge.manager.api.config');
+        $router->put("{$prefix}/api/config", [ForgeManagerController::class, 'updateConfig'])
+               ->name('forge.manager.api.config.update');
     }
 
     /**
