@@ -93,12 +93,19 @@ class RouteCache
 
     public function forget(string $level): void
     {
-        if ($this->store === null) {
+        if ($this->store === null || $this->debugMode) {
             return;
         }
-        $key = $this->key($level);
-        $this->store->forget($key);
-        $this->unregisterKey($key);
+        try {
+            $key = $this->key($level);
+            $this->store->forget($key);
+            $this->unregisterKey($key);
+        } catch (\Throwable $e) {
+            throw new CacheDriverException(
+                'Cache driver error: ' . $e->getMessage(),
+                previous: $e,
+            );
+        }
     }
 
     public function clear(): void
@@ -129,12 +136,19 @@ class RouteCache
 
     private function registerKey(string $key): void
     {
-        $keys = $this->store->get(self::KEYS_INDEX);
-        $keys = is_array($keys) ? $keys : [];
-        if (!in_array($key, $keys, true)) {
-            $keys[] = $key;
-            // 索引本身永久缓存（不随单个 level TTL 失效）
-            $this->store->forever(self::KEYS_INDEX, $keys);
+        try {
+            $keys = $this->store->get(self::KEYS_INDEX);
+            $keys = is_array($keys) ? $keys : [];
+            if (!in_array($key, $keys, true)) {
+                $keys[] = $key;
+                // 索引本身永久缓存（不随单个 level TTL 失效）
+                $this->store->forever(self::KEYS_INDEX, $keys);
+            }
+        } catch (\Throwable $e) {
+            throw new CacheDriverException(
+                'Cache driver error: ' . $e->getMessage(),
+                previous: $e,
+            );
         }
     }
 
