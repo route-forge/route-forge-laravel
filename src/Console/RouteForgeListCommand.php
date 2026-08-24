@@ -67,7 +67,8 @@ class RouteForgeListCommand extends Command
 
             $rows[] = [
                 'name' => $name,
-                'level' => $level,
+                // null → 'unassigned' 统一输出，与 SPEC §3.1.5 unassigned 特殊层级语义一致
+                'level' => $level ?? 'unassigned',
                 'methods' => $methods,
                 'uri' => $route->uri(),
             ];
@@ -78,9 +79,29 @@ class RouteForgeListCommand extends Command
             $rows = [];
         }
 
-        // JSON 输出
+        // 当前可用层级（含 unassigned 特殊层级）
+        $availableLevels = $levels;
+        if ($fallback === null) {
+            $availableLevels[] = 'unassigned';
+        }
+
+        // 过滤条件描述
+        $filter = [];
+        if ($filterLevel !== null && $filterLevel !== '') {
+            $filter['level'] = $filterLevel;
+        }
+        if ($onlyUnassigned) {
+            $filter['unassigned'] = true;
+        }
+
+        // JSON 输出（结构化对象，便于脚本消费）
         if ($asJson) {
-            $this->line(json_encode($rows, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+            $this->line(json_encode([
+                'levels' => $availableLevels,
+                'filter' => empty($filter) ? null : $filter,
+                'count'  => count($rows),
+                'routes' => $rows,
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
             return 0;
         }
 
@@ -93,8 +114,8 @@ class RouteForgeListCommand extends Command
         $tableRows = array_map(function (array $r) {
             return [
                 $r['name'],
-                $r['level'] ?? '⚠ 未分配',
-                implode(',', $r['methods']),
+                $r['level'],
+                implode('|', $r['methods']),
                 $r['uri'],
             ];
         }, $rows);

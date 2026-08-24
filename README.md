@@ -116,16 +116,16 @@ php artisan route:forge:clear
 
 ## 主要配置项（config/forge.php）
 
-| 键                | 类型             | 默认值             | 说明                                        |
-|-------------------|------------------|--------------------|---------------------------------------------|
-| `levels`          | `array`          | 见配置文件         | 层级定义表（匹配规则、加载策略）            |
-| `endpoint_prefix` | `string`         | `'/_forge/routes'` | 路由元信息对外端点前缀                      |
-| `cache_ttl`       | `int\|null`      | `3600`             | 统一缓存 TTL（秒）；null 不缓存            |
-| `cache_driver`    | `string\|null`   | `null`             | 缓存驱动；null 使用默认驱动                 |
-| `strict_mode`     | `bool`           | `false`            | 未命中层级时抛异常（true）或走兜底（false） |
-| `fallback_level`  | `string\|null`   | `null`             | 兜底层级；null 时归入 unassigned 特殊层级 |
-| `scheme_version`  | `int`            | `1`                | 摘要端点响应格式版本（schemeVersion）     |
-| `classifier`      | `callable\|null` | `null`             | 自定义分类回调 `fn(Route $r): ?string`      |
+| 键                | 类型             | 默认值             | 说明                                           |
+|-------------------|------------------|--------------------|------------------------------------------------|
+| `levels`          | `array`          | 见配置文件         | 层级定义表（匹配规则、加载策略）               |
+| `endpoint_prefix` | `string`         | `'/_forge/routes'` | 路由元信息对外端点前缀                         |
+| `cache_ttl`       | `int\|null`      | `3600`             | 统一缓存 TTL（秒）；null 不缓存，负值视为 null |
+| `cache_driver`    | `string\|null`   | `null`             | 缓存驱动；null 使用默认驱动                    |
+| `strict_mode`     | `bool`           | `false`            | 未命中层级时抛异常（true）或走兜底（false）    |
+| `fallback_level`  | `string\|null`   | `null`             | 兜底层级；null 时归入 unassigned 特殊层级      |
+| `scheme_version`  | `int`            | `1`                | 摘要端点响应格式版本（schemeVersion）          |
+| `classifier`      | `callable\|null` | `null`             | 自定义分类回调 `fn(Route $r): ?string`         |
 
 完整配置项参考见 [`.docs/SPEC.md` §5.1](./.docs/SPEC.md)。
 

@@ -115,6 +115,7 @@ return [
     | null = 不缓存（每次实时扫描路由表）
     | 0 = 永久缓存（Laravel Cache 惯例，
     | ⚠ 非 HTTP Cache-Control: max-age=0 含义）。
+    | 负值 = 视为 null（不缓存）。
     |
     */
     'cache_ttl'         => env('FORGE_CACHE_TTL', 3600),

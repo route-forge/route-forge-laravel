@@ -153,7 +153,7 @@ readonly class RouteRepository
             $levelsSummary[$level] = [
                 'description' => $cfg['description'] ?? '',
                 'load'        => $cfg['load'] ?? 'lazy',
-                'route_count' => $levelRouteCounts[$level] ?? 0,
+                'route_count' => $levelRouteCounts['counts'][$level] ?? 0,
                 'route'       => [
                     'uri'     => "{$endpointPrefix}/{$level}",
                     'methods' => ['GET', 'HEAD'],
@@ -165,7 +165,7 @@ readonly class RouteRepository
         $levelsSummary[self::UNASSIGNED_LEVEL] = [
             'description' => '未命中任何层级的路由（fallback_level=null）',
             'load'        => 'lazy',
-            'route_count' => count($this->getUnassignedRoutes()),
+            'route_count' => $levelRouteCounts['unassigned'],
             'route'       => [
                 'uri'     => "{$endpointPrefix}/" . self::UNASSIGNED_LEVEL,
                 'methods' => ['GET', 'HEAD'],
@@ -193,13 +193,17 @@ readonly class RouteRepository
     }
 
     /**
-     * 扫描所有命名路由，返回每个层级命中的路由数量。
+     * 扫描所有命名路由，返回每个层级命中的路由数量及未分配数量。
      *
-     * @return array<string,int>
+     * 一次遍历同时统计各层级命中数和 unassigned 数，
+     * 避免 getSummary() 再调用 getUnassignedRoutes() 造成二次全量扫描。
+     *
+     * @return array{counts: array<string,int>, unassigned: int}
      */
     private function countRoutesPerLevel(): array
     {
         $counts = [];
+        $unassigned = 0;
         foreach ($this->router->getRoutes() as $route) {
             $name = $route->getName();
             if ($name === null) {
@@ -208,9 +212,11 @@ readonly class RouteRepository
             $resolved = $this->tierResolver->resolve($route);
             if ($resolved !== null) {
                 $counts[$resolved] = ($counts[$resolved] ?? 0) + 1;
+            } else {
+                $unassigned++;
             }
         }
-        return $counts;
+        return ['counts' => $counts, 'unassigned' => $unassigned];
     }
 
     /**

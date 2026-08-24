@@ -33,13 +33,14 @@ class RouteCache
 
     /**
      * @param bool $debugMode 开发模式下跳过所有缓存读写，确保路由变更即时生效
-     * @param int|null $ttl 统一缓存 TTL（秒）；null=不缓存，0=永久缓存
+     * @param int|null $ttl 统一缓存 TTL（秒）；null=不缓存，0=永久缓存；负值视为 null（不缓存）
      */
     public function __construct(?CacheRepository $store = null, bool $debugMode = false, ?int $ttl = null)
     {
         $this->store = $store;
         $this->debugMode = $debugMode;
-        $this->ttl = $ttl;
+        // 负值 TTL 无意义，降级为不缓存（与 null 行为一致）
+        $this->ttl = ($ttl !== null && $ttl < 0) ? null : $ttl;
     }
 
     /**

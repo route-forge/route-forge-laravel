@@ -397,13 +397,13 @@ php artisan route:forge:list --unassigned
 
 输出示例：
 
-| Name                | Level     | Methods    | URI                |
-|---------------------|-----------|------------|--------------------|
-| auth.login          | public    | POST       | auth/login         |
-| admin.users.index   | admin     | GET\|HEAD  | admin/users        |
-| admin.users.show    | admin     | GET\| HEAD | admin/users/{user} | 
-| client.orders.store | client    | POST       | client/orders      | 
-| debug.info          | ⚠ 未分配 | GET\| HEAD | _debug/info        |
+| Name                | Level      | Methods   | URI                |
+|---------------------|------------|-----------|--------------------|
+| auth.login          | public     | POST      | auth/login         |
+| admin.users.index   | admin      | GET\|HEAD | admin/users        |
+| admin.users.show    | admin      | GET\|HEAD | admin/users/{user} |
+| client.orders.store | client     | POST      | client/orders      |
+| debug.info          | unassigned | GET\|HEAD | _debug/info        |
 
 行为说明：
 
@@ -411,7 +411,40 @@ php artisan route:forge:list --unassigned
 - 层级分配逻辑与运行时完全一致（遵循 §3.1.4 五级优先级）。
 - `--level` 过滤时，若层级名不存在则提示可用层级列表。
 - `--unassigned` 仅在 `fallback_level=null` 时有意义；`fallback_level` 非 null 时所有路由都有层级，此参数输出为空。
-- 未分配路由在 table 输出中以 `⚠ 未分配` 标记，提醒开发者关注。
+- 未分配路由在 table 输出中以 `unassigned` 显示（与 JSON 输出及特殊层级名保持一致）。
+
+##### `--json` 输出结构
+
+`--json` 输出结构化对象（便于脚本消费），而非纯数组：
+
+```json
+{
+  "levels": ["public", "client", "manage", "admin", "unassigned"],
+  "filter": null,
+  "count": 5,
+  "routes": [
+    {
+      "name": "auth.login",
+      "level": "public",
+      "methods": ["POST"],
+      "uri": "auth/login"
+    },
+    {
+      "name": "debug.info",
+      "level": "unassigned",
+      "methods": ["GET"],
+      "uri": "_debug/info"
+    }
+  ]
+}
+```
+
+字段说明：
+
+- `levels`：当前可用层级列表（含 `unassigned` 特殊层级，仅 `fallback_level=null` 时包含）。
+- `filter`：当前过滤条件（`--level` / `--unassigned`），无过滤时为 `null`。
+- `count`：匹配路由总数。
+- `routes`：路由条目数组，每条含 `name`、`level`（未分配为 `"unassigned"`）、`methods`、`uri`。
 
 > 设计意图：开发阶段最常被问到的问题是"我的路由到底被分到了哪个层级"。这个命令让开发者无需启动前端、无需打开浏览器，一条命令即可验证配置效果。
 
@@ -566,24 +599,24 @@ php artisan route:forge:clear --level=admin
 
 ## 5. 配置项参考
 
-| 键                                     | 类型                         | 默认值             | 说明                                                                                                                                                                   |
-|----------------------------------------|------------------------------|--------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `levels`                               | `array<string, LevelConfig>` | 见 3.1.2           | 层级定义表，键为层级名（自定义），值为该层级的匹配规则与缓存策略                                                                                                       |
-| `levels.{name}.description`            | `string`                     | `''`               | 层级描述，仅用于文档与调试输出                                                                                                                                         |
-| `levels.{name}.match.prefix`           | `string[]`                   | `[]`               | URI 前缀匹配列表，命中任一即归入此层级                                                                                                                                 |
-| `levels.{name}.match.middleware`       | `string[]`                   | `[]`               | 中间件匹配列表，匹配逻辑受 `middleware_match` 控制                                                                                                                     |
-| `levels.{name}.match.middleware_match` | `string\|array`              | `'any'`            | 中间件匹配模式：`'any'`（OR）/ `'all'`（AND）/ DNF 数组（见 §3.1.2 中间件匹配模式）                                                                                    |
-| `levels.{name}.load`                   | `'eager'\|'lazy'`            | `'lazy'`           | 是否在摘要端点中标记为「前端应预加载」；前端自动发现时据此决定预加载策略                                                                                               |
-| `levels.{name}.endpoint_middleware`    | `string[]\|null`             | `[]`               | 访问该层级元信息端点（`GET /{endpoint_prefix}/{level}`）时要求的中间件列表；未配置或空数组则不限制                                                                     |
-| `endpoint_prefix`                      | `string`                     | `'/_forge/routes'` | 路由元信息对外端点前缀（同时用于层级端点和摘要端点）                                                                                                                   |
-| `url_prefix`                           | `string\|null`               | `null`             | 应用的路由前缀，通过摘要端点 `config.url_prefix` 下发。支持完整 URL（含协议域名）或仅路径前缀；`null` 或空字符串 = 不下发                                              |
-| `endpoint_middleware`                  | `string[]`                   | `[]`               | 摘要端点（`GET /{endpoint_prefix}`）中间件；空数组或 null 不限制                                                                                                       |
-| `cache_ttl`                            | `int\|null`                  | `3600`             | 统一缓存 TTL（秒）；`null` 不缓存，`0` 永久缓存。同时作用于所有层级端点与摘要端点。⚠️ `0` 遵循 Laravel Cache TTL 惯例（永久），非 HTTP `Cache-Control: max-age=0` 含义 |
-| `cache_driver`                         | `string\|null`               | `null`             | 缓存驱动；`null` 用默认驱动，可指定 `redis`/`file`/`array` 等                                                                                                          |
-| `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 fallback/unassigned（false）                                                                                                |
-| `fallback_level`                       | `string\|null`               | `null`             | 兜底层级名；`null` 时未命中路由归入 `unassigned` 特殊层级（经 `GET /{endpoint_prefix}/unassigned` 获取，见 §3.1.6）；非 null 则归入指定层级              |
-| `scheme_version`                       | `int`                        | `1`                | 摘要端点返回的响应格式版本号（`schemeVersion` 字段）；后续迭代引入不兼容的格式变更时递增，前端据此做版本兼容                                                             |
-| `classifier`                           | `callable\|null`             | `null`             | 自定义分类回调，签名 `fn(Route $r): ?string`，返回层级名或 null。返回的层级名必须在 `levels` 配置中存在，否则抛 `UnknownClassifierTierException`                       |
+| 键                                     | 类型                         | 默认值             | 说明                                                                                                                                                                                              |
+|----------------------------------------|------------------------------|--------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `levels`                               | `array<string, LevelConfig>` | 见 3.1.2           | 层级定义表，键为层级名（自定义），值为该层级的匹配规则与缓存策略                                                                                                                                  |
+| `levels.{name}.description`            | `string`                     | `''`               | 层级描述，仅用于文档与调试输出                                                                                                                                                                    |
+| `levels.{name}.match.prefix`           | `string[]`                   | `[]`               | URI 前缀匹配列表，命中任一即归入此层级                                                                                                                                                            |
+| `levels.{name}.match.middleware`       | `string[]`                   | `[]`               | 中间件匹配列表，匹配逻辑受 `middleware_match` 控制                                                                                                                                                |
+| `levels.{name}.match.middleware_match` | `string\|array`              | `'any'`            | 中间件匹配模式：`'any'`（OR）/ `'all'`（AND）/ DNF 数组（见 §3.1.2 中间件匹配模式）                                                                                                               |
+| `levels.{name}.load`                   | `'eager'\|'lazy'`            | `'lazy'`           | 是否在摘要端点中标记为「前端应预加载」；前端自动发现时据此决定预加载策略                                                                                                                          |
+| `levels.{name}.endpoint_middleware`    | `string[]\|null`             | `[]`               | 访问该层级元信息端点（`GET /{endpoint_prefix}/{level}`）时要求的中间件列表；未配置或空数组则不限制                                                                                                |
+| `endpoint_prefix`                      | `string`                     | `'/_forge/routes'` | 路由元信息对外端点前缀（同时用于层级端点和摘要端点）                                                                                                                                              |
+| `url_prefix`                           | `string\|null`               | `null`             | 应用的路由前缀，通过摘要端点 `config.url_prefix` 下发。支持完整 URL（含协议域名）或仅路径前缀；`null` 或空字符串 = 不下发                                                                         |
+| `endpoint_middleware`                  | `string[]`                   | `[]`               | 摘要端点（`GET /{endpoint_prefix}`）中间件；空数组或 null 不限制                                                                                                                                  |
+| `cache_ttl`                            | `int\|null`                  | `3600`             | 统一缓存 TTL（秒）；`null` 不缓存，`0` 永久缓存，负值视为 `null`（不缓存）。同时作用于所有层级端点与摘要端点。⚠️ `0` 遵循 Laravel Cache TTL 惯例（永久），非 HTTP `Cache-Control: max-age=0` 含义 |
+| `cache_driver`                         | `string\|null`               | `null`             | 缓存驱动；`null` 用默认驱动，可指定 `redis`/`file`/`array` 等                                                                                                                                     |
+| `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 fallback/unassigned（false）                                                                                                                           |
+| `fallback_level`                       | `string\|null`               | `null`             | 兜底层级名；`null` 时未命中路由归入 `unassigned` 特殊层级（经 `GET /{endpoint_prefix}/unassigned` 获取，见 §3.1.6）；非 null 则归入指定层级                                                       |
+| `scheme_version`                       | `int`                        | `1`                | 摘要端点返回的响应格式版本号（`schemeVersion` 字段）；后续迭代引入不兼容的格式变更时递增，前端据此做版本兼容                                                                                      |
+| `classifier`                           | `callable\|null`             | `null`             | 自定义分类回调，签名 `fn(Route $r): ?string`，返回层级名或 null。返回的层级名必须在 `levels` 配置中存在，否则抛 `UnknownClassifierTierException`                                                  |
 
 ## 6. 错误码
 

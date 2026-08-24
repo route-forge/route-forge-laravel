@@ -103,21 +103,34 @@ class ListCommandTest extends TestCase
         $decoded = json_decode($out, true);
         $this->assertIsArray($decoded, 'JSON 输出应为数组');
 
-        $names = array_column($decoded, 'name');
+        // 结构化输出：含 levels / count / routes 字段
+        $this->assertArrayHasKey('levels', $decoded);
+        $this->assertArrayHasKey('count', $decoded);
+        $this->assertArrayHasKey('routes', $decoded);
+        $this->assertNull($decoded['filter'], '无过滤条件时 filter 为 null');
+        $this->assertSame(3, $decoded['count']);
+
+        // levels 应包含已定义层级 + unassigned 特殊层级（fallback=null）
+        $this->assertContains('admin', $decoded['levels']);
+        $this->assertContains('unassigned', $decoded['levels']);
+
+        // routes 为路由条目数组
+        $routes = $decoded['routes'];
+        $names  = array_column($routes, 'name');
         $this->assertContains('admin.users.index', $names);
         $this->assertContains('client.dashboard', $names);
         $this->assertContains('orphan', $names);
 
         // 验证条目结构
         $adminKey = array_search('admin.users.index', $names, true);
-        $admin = $decoded[$adminKey];
+        $admin  = $routes[$adminKey];
         $this->assertSame('admin', $admin['level']);
         $this->assertSame(['GET'], $admin['methods']);
         $this->assertSame('admin/users', $admin['uri']);
 
-        // orphan 未分配 → level=null
+        // orphan 未分配 → level='unassigned'（不再为 null）
         $orphanKey = array_search('orphan', $names, true);
-        $this->assertNull($decoded[$orphanKey]['level']);
+        $this->assertSame('unassigned', $routes[$orphanKey]['level']);
     }
 
     public function test_unassigned_filter_when_fallback_null(): void
