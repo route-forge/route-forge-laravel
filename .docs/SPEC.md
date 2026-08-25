@@ -115,8 +115,9 @@ return [
 - 全部未命中：`strict_mode=true` 抛 `RouteTierNotAssignedException`；`strict_mode=false` 时，若 `fallback_level` 非 null
   则归入该层级，若为 null 则归入「未分配」分组。
 - `classifier` 回调优先级介于「显式 `->tier()` / `Route::group` tier」与「配置 match」之间（完整五级优先级见
-  §3.1.4），用于实现复杂自定义分类逻辑（如基于 Controller 命名空间归类）。返回的层级名必须在 `levels` 配置中存在，
-  否则抛 `UnknownClassifierTierException`（无论 `strict_mode` 是否开启）。
+  §3.1.4），用于实现复杂自定义分类逻辑（如基于 Controller 命名空间归类）。 **注意**：由于显式 `->tier()`
+  会直接返回不继续匹配，classifier 实际无法覆盖显式 tier，仅对未显式标注的路由生效。返回的层级名必须在
+  `levels` 配置中存在，否则抛 `UnknownClassifierTierException`（无论 `strict_mode` 是否开启）。
 
 ##### 中间件匹配模式（`middleware_match`）
 
@@ -208,7 +209,7 @@ Route::group(['tier' => 'admin'], function () {
 
 当多种分配方式并存时，按以下优先级决定一条路由的最终层级（高优先级覆盖低优先级）：
 
-1. **显式** **`->tier()`** **调用**（最高）
+1. **显式** **`->tier()`** **调用**（最高）：直接返回，不继续后续匹配
 2. **`Route::group`** **的** **`tier`** **选项**（继承自最近一层 group，内层覆盖外层）
 3. **`classifier`** **自定义回调**返回非 null 值
 4. **配置文件** **`match`** **规则**匹配（受 `middleware_match` 控制）

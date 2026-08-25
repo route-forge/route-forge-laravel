@@ -2,9 +2,21 @@
 
 > Laravel 命名路由的分级懒加载后端：路由扫描、tier 分配、元信息端点、缓存与类型生成。
 
+## 主要用途
+
+- 让前端可以直接使用 Laravel 的命名路由（name + 参数 + method + uri），避免在前端硬编码
+  URL。前端通过路由元信息端点按需获取路由信息并在运行时拼接 URL。
+- 支持按“层级（tier）”懒加载路由元信息：前端可先请求摘要（所有层级概览），按需只加载某个层级的命名路由，显著减少首次加载的网络和内存开销，提高性能和
+  UX。
+- 同时提供 TypeScript 类型声明生成功能，方便在前端静态类型中使用路由名与参数签名，减少拼写和参数错误。
+
+以上设计使得前端能与后端路由保持单一事实来源（single source of truth），便于路由变更的即时生效与协作。
+
 ## 📦 仓库来源
 
-本仓库自 **route-forge monorepo**（[github.com/xyj2156/route-forge](https://github.com/xyj2156/route-forge)）拆分而来，仅承载其中的 **`route-forge/laravel` composer 包**（后端部分）。
+本仓库自 **route-forge
+monorepo**（[github.com/xyj2156/route-forge](https://github.com/xyj2156/route-forge)）拆分而来，仅承载其中的
+**`route-forge/laravel` composer 包**（后端实现）。
 
 - 前端包（`@route-forge/core`、`@route-forge/vue`）仍在原 monorepo 中维护；
 - 规划文档随拆分迁移至本仓库 [`.docs`](./.docs) 目录，作为前后端契约的单一真相源：
@@ -29,6 +41,28 @@ Route Forge 后端提供多种互相兼容的路由层级（tier）分配方式�
 - **Artisan 命令**：`route:forge:list` 查看层级分配结果、`route:forge:types` 生成 TS 类型声明；
 - **严格模式**：`strict_mode=true` 时未命中层级抛 `RouteTierNotAssignedException`；
 - **管理器页面**：开发环境（`APP_DEBUG=true`）专属的可视化路由管理面板，支持层级总览、路由搜索/过滤、配置编辑。
+
+## 前端集成要点
+
+- 初始化：前端应用启动时可请求 `GET /_forge/routes`，获取可用层级（levels）、schemeVersion
+  及未分配路由信息，用于展示路由导航或决定哪些层级需按需加载。
+
+- 懒加载某个层级：当用户进入某个功能区或需构建该层级下 URL 时，只请求 `GET /_forge/routes/{level}`（例如
+  `/ _forge/routes/admin`）以获取该层级下的命名路由元信息。
+
+- URL 构建：路由元信息包含 route name、uri pattern 与参数描述，前端可基于这些信息按需构造最终
+  URL（或配合提供的前端库直接调用）。
+
+- 类型支持：在后端运行 `php artisan route:forge:types` 可生成 TypeScript 类型声明，直接用于前端代码中，确保路由名与参数类型安全。
+
+示例：
+
+```js
+// 初始化获取摘要
+const summary = await fetch('/_forge/routes').then(r => r.json());
+// 按需懒加载 admin 层级
+const adminRoutes = await fetch('/_forge/routes/admin').then(r => r.json());
+```
 
 ## 环境要求
 
@@ -87,7 +121,8 @@ Route::middleware(['auth', 'admin'])->tier('admin')->prefix('admin')->group(func
 
 > ⚠️ **注意：组级属性必须在 `group()` 之前声明，不支持 `group()` 返回后追加。**
 >
-> `Route::group([...], fn)->tier('admin')` 这类写法**不会**把 `tier` 应用到该组——Laravel 的 `group()` 在返回前已完成组内路由注册并将组属性出栈，其后链式调用的属性挂在一个全新的 Registrar 上，会被静默丢弃。出现这种用法时，Route Forge 会向 Laravel 日志写入一条 `warning`。
+> `Route::group([...], fn)->tier('admin')` 这类写法 **不会**把 `tier` 应用到该组——Laravel 的
+> `group()` 在返回前已完成组内路由注册并将组属性出栈，其后链式调用无法回溯已注册路由。
 >
 > 正确写法二选一：
 > - 数组语法：`Route::group(['tier' => 'admin', ...], fn)`
@@ -120,7 +155,7 @@ php artisan route:forge:clear
 | 键                | 类型             | 默认值             | 说明                                           |
 |-------------------|------------------|--------------------|------------------------------------------------|
 | `levels`          | `array`          | 见配置文件         | 层级定义表（匹配规则、加载策略）               |
-| `endpoint_prefix` | `string`         | `'/_forge/routes'` | 路由元信息对外端点前缀                         |
+| `endpoint_prefix` | `string`         | `'/_forge/routes'` | 路由元信息对外端点前缀，同时也是摘要路由       |
 | `cache_ttl`       | `int\|null`      | `3600`             | 统一缓存 TTL（秒）；null 不缓存，负值视为 null |
 | `cache_driver`    | `string\|null`   | `null`             | 缓存驱动；null 使用默认驱动                    |
 | `strict_mode`     | `bool`           | `false`            | 未命中层级时抛异常（true）或走兜底（false）    |
@@ -132,7 +167,8 @@ php artisan route:forge:clear
 
 ### 开发模式
 
-当 `APP_DEBUG=true`（Laravel 默认的开发环境配置）时，Route Forge 自动跳过所有缓存读写操作，路由变更即时生效，无需手动清除缓存。生产环境（`APP_DEBUG=false`）下统一使用 `cache_ttl` 配置控制缓存。
+当 `APP_DEBUG=true`（Laravel 默认的开发环境配置）时，Route Forge 自动跳过所有缓存读写操作，路由变更即时生效，无需手动清除缓存。生产环境（
+`APP_DEBUG=false`）默认启用缓存以提升性能。
 
 ### 管理器页面
 
