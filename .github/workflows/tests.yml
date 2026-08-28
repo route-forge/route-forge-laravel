@@ -1,0 +1,45 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: ['**']
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.2', '8.3', '8.4']
+        laravel: ['11.*', '12.*']
+    name: PHP ${{ matrix.php }} · Laravel ${{ matrix.laravel }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          tools: composer:v2
+
+      # orchestra/testbench 的大版本与 Laravel 大版本一一对应：
+      #   testbench ^9 → Laravel 11，^10 → Laravel 12。
+      # Laravel 13（testbench ^11）经 composer 约束声明支持，
+      # 待生态稳定后追加到矩阵。
+      - name: Pin testbench to Laravel ${{ matrix.laravel }}
+        run: |
+          case "${{ matrix.laravel }}" in
+            11.*) tb="^9.0" ;;
+            12.*) tb="^10.0" ;;
+            *)    tb="^10.0" ;;
+          esac
+          composer require --dev "orchestra/testbench:${tb}" --no-update --no-interaction
+
+      - name: Install dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress --prefer-stable
+
+      - name: Run tests
+        run: vendor/bin/phpunit --colors=never

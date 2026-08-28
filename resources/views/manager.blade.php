@@ -242,7 +242,7 @@
   const TPL = {
     method: m => `<span class="mb m-${m}">${m}</span>`,
     middleware: arr => arr.length ? `<div class="mwl">${arr.map(m => `<span class="mwt">${esc(m)}</span>`).join('')}</div>` : '<span style="color:var(--tx2)">—</span>',
-    tierBadge: t => `<span class="tb ${TC[t] ? 't-' + t : 't-def'}">${t}</span>`,
+    tierBadge: t => `<span class="tb ${TC[t] ? 't-' + t : 't-def'}">${esc(t)}</span>`,
     empty: '<tr><td colspan="5" class="emp">没有匹配的路由</td></tr>'
   };
 

@@ -29,7 +29,7 @@ Route Forge 后端提供多种互相兼容的路由层级（tier）分配方式�
 
 1. **`->tier()` 宏**：定义路由时显式标记，链式调用对资源路由同样生效；
 2. **`Route::group` 的 `tier` 选项**：整组路由继承层级，嵌套 group 内层覆盖外层；
-3. **链式 `tier()` 语法**：`Route::tier('admin')->group(...)` 流式写法，可与 `middleware`/`prefix`/`as` 等任意属性自由链式组合；
+3. **链式 `tier()` 语法**（第 2 种 group 的流式写法）：`Route::tier('admin')->group(...)`，可与 `middleware`/`prefix`/`as` 等任意属性自由链式组合；
 4. **配置文件按规则批量分配**：`config/forge.php` 中按 URI 前缀 / 中间件（支持 `any` / `all` / DNF 数组三种匹配模式）批量归类。
 
 此外还包括：
@@ -189,7 +189,7 @@ composer test            # 运行 PHPUnit 测试套件
 composer test:coverage   # 文本覆盖率报告
 ```
 
-测试基于 [orchestra/testbench](https://github.com/orchestral/testbench)，覆盖层级分配优先级、中间件匹配（any/all/DNF）、端点响应、缓存、严格模式与两个 Artisan 命令。
+测试基于 [orchestra/testbench](https://github.com/orchestral/testbench)，覆盖层级分配优先级（含资源路由）、中间件匹配（any/all/DNF）、端点响应、缓存、严格模式与三个 Artisan 命令。CI 通过 GitHub Actions 跑 PHP 8.2–8.4 × Laravel 11/12 版本矩阵（见 `.github/workflows/tests.yml`）。
 
 ## License
 

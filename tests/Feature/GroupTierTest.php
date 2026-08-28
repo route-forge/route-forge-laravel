@@ -193,6 +193,16 @@ class GroupTierTest extends TestCase
         });
     }
 
+    public function test_explicit_tier_macro_with_invalid_level_throws_exception(): void
+    {
+        // 单条路由 ->tier('nonexistent') 宏：与其它所有 tier 入口一致，定义时立即校验（fail-fast）
+        $this->expectException(UnknownLevelException::class);
+
+        RouteFacade::get('/explicit', static function () {})
+            ->name('explicit')
+            ->tier('nonexistent');
+    }
+
     public function test_fluent_tier_with_valid_level_works(): void
     {
         // Route::tier('admin') 链式调用，tier 值在 levels 配置中应正常工作

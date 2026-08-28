@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace RouteForge\Laravel\Tests\Unit;
 
 use Illuminate\Cache\ArrayStore;
+use Illuminate\Cache\FileStore;
 use Illuminate\Cache\Repository;
+use Illuminate\Filesystem\Filesystem;
 use PHPUnit\Framework\TestCase;
 use RouteForge\Laravel\Cache\RouteCache;
 
@@ -17,7 +19,9 @@ use RouteForge\Laravel\Cache\RouteCache;
  *
  * TTL 由构造函数统一传入，set() 不再从 payload 中读取 cache 字段。
  *
- * 使用 Illuminate\Cache\ArrayStore（内存驱动）避免 Redis/file 等外部依赖；
+ * 驱动覆盖：ArrayStore（内存，默认）+ FileStore（文件，验证非内存驱动
+ * 走同一套 keys-index 逻辑）。Redis 驱动因需外部服务，纳入需 redis-server
+ * 的独立 CI job，不在本单测强制依赖。
  * 不走 Laravel 容器，直接扩展 PHPUnit\Framework\TestCase。
  */
 class RouteCacheTest extends TestCase
@@ -139,5 +143,46 @@ class RouteCacheTest extends TestCase
         $cache = new RouteCache($store, debugMode: true);
         $cache->clear(); // should not throw
         $this->assertTrue(true);
+    }
+
+    public function test_positive_ttl_entry_expires(): void
+    {
+        // 真实 TTL 过期：正整数 TTL 写入后，超过有效期应返回 null
+        $cache   = $this->makeCache(ttl: 1);
+        $payload = ['level' => 'admin', 'routes' => []];
+        $cache->set('admin', $payload);
+
+        // 立即读取应命中
+        $this->assertSame($payload, $cache->get('admin'));
+
+        // 超过 TTL 后应过期
+        sleep(2);
+        $this->assertNull($cache->get('admin'));
+    }
+
+    public function test_file_store_driver_roundtrip_and_clear(): void
+    {
+        // 非内存驱动（file）走同一套 set/get/keys-index/clear 逻辑
+        $dir = sys_get_temp_dir() . '/forge-cache-test-' . uniqid('', true);
+        mkdir($dir, 0777, true);
+
+        try {
+            $cache   = new RouteCache(new Repository(new FileStore(new Filesystem(), $dir)), ttl: 60);
+            $payload = ['level' => 'admin', 'routes' => []];
+
+            $cache->set('admin', $payload);
+            $cache->set('client', ['level' => 'client', 'routes' => []]);
+            $this->assertSame($payload, $cache->get('admin'));
+
+            // clear() 通过 keys 索引清空所有层级
+            $cache->clear();
+            $this->assertNull($cache->get('admin'));
+            $this->assertNull($cache->get('client'));
+        } finally {
+            foreach (glob($dir . '/*') ?: [] as $file) {
+                @unlink($file);
+            }
+            @rmdir($dir);
+        }
     }
 }

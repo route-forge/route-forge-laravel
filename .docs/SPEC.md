@@ -118,7 +118,9 @@ return [
 - `middleware`：路由中间件集合按 `middleware_match` 规则匹配（详见下方「中间件匹配模式」）。
 - 显式 `->tier()` 标记优先级最高，覆盖配置匹配结果（见 3.1.4）。
 - 多个层级同时命中时，按 `levels` 数组定义顺序取最后一个（后定义覆盖前定义，与 `Route::group`
-  内层覆盖外层的语义一致；追加新层级时无需调整已有层级的顺序）。
+  内层覆盖外层的语义一致）。因此把新层级**追加到数组末尾**即可生效，无需改动已有层级；但反过来说，
+  若某条新规则与已有层级冲突命中且你希望**旧层级继续优先**，则必须把新层级放到旧层级**之前**——
+  顺序即优先级，越靠后越优先。
 - 全部未命中：`strict_mode=true` 抛 `RouteTierNotAssignedException`；`strict_mode=false` 时归入 `unassigned` 特殊层级（唯一的兜底机制，见 §3.1.4）。
 - `classifier` 回调优先级介于「显式 `->tier()` / `Route::group` tier」与「配置 match」之间（完整五级优先级见
   §3.1.4），用于实现复杂自定义分类逻辑（如基于 Controller 命名空间归类）。 **注意**：由于显式 `->tier()`
@@ -702,8 +704,8 @@ PUT /_forge/manager/api/config   # 更新配置文件
 | 中间件匹配   | `middleware_match` 简单模式（any/all）、高级模式（DNF 数组）、边界情况（空数组、单元素）                                               |
 | 端点响应     | `/_forge/routes/{level}` 返回结构、`/_forge/routes` 摘要端点返回结构、缓存命中、未声明层级 404、层级端点中间件保护、摘要端点中间件保护 |
 | 严格模式     | `strict_mode=true` 未命中抛异常、`false` 未命中归入 unassigned 特殊层级                                                              |
-| Laravel 兼容 | Laravel 11/12/13 三版本矩阵；资源路由、嵌套 group、命名空间                                                                            |
-| 缓存         | `cache_driver` 各驱动（redis/file/array）、TTL 过期、手动失效、`0` 永久缓存、`cache_ttl=null` 不缓存                                   |
+| Laravel 兼容 | CI（GitHub Actions）跑 PHP 8.2–8.4 × Laravel 11/12 矩阵；Laravel 13 经 composer 约束支持；资源路由、嵌套 group、链式语法、Router 重绑共享 RouteCollection |
+| 缓存         | `array`/`file` 驱动（store 无关，`redis` 复用同一 `Repository` 接口，无专属逻辑）、TTL 正数过期、手动失效、`0` 永久缓存、`cache_ttl=null` 不缓存、keys 索引清理、debug 模式跳过读写 |
 
 ## 8. 版本与发布
 

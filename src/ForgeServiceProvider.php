@@ -195,6 +195,16 @@ class ForgeServiceProvider extends ServiceProvider
     {
         /** @var Route $route */
         Route::macro('tier', function (string $tier): Route {
+            // 与其它所有 tier 入口（链式 Registrar / group 数组 / 资源路由）一致：
+            // 定义时立即校验层级合法性，fail-fast 而非延迟到端点/命令解析时抛错
+            $levels = config('forge.levels', []);
+            if (!isset($levels[$tier])) {
+                throw new UnknownLevelException(
+                    'Cannot set tier [' . $tier . ']: not defined in levels config. '
+                    . 'Available levels: ' . implode(', ', array_keys($levels)),
+                );
+            }
+
             $action = $this->getAction();
             $action['tier'] = $tier;
             $this->setAction($action);
