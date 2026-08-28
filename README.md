@@ -48,7 +48,7 @@ Route Forge 后端提供多种互相兼容的路由层级（tier）分配方式�
   及未分配路由信息，用于展示路由导航或决定哪些层级需按需加载。
 
 - 懒加载某个层级：当用户进入某个功能区或需构建该层级下 URL 时，只请求 `GET /_forge/routes/{level}`（例如
-  `/ _forge/routes/admin`）以获取该层级下的命名路由元信息。
+  `/_forge/routes/admin`）以获取该层级下的命名路由元信息。
 
 - URL 构建：路由元信息包含 route name、uri pattern 与参数描述，前端可基于这些信息按需构造最终
   URL（或配合提供的前端库直接调用）。

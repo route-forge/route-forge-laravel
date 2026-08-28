@@ -706,6 +706,7 @@ PUT /_forge/manager/api/config   # 更新配置文件
 | 严格模式     | `strict_mode=true` 未命中抛异常、`false` 未命中归入 unassigned 特殊层级                                                              |
 | Laravel 兼容 | CI（GitHub Actions）跑 PHP 8.2–8.4 × Laravel 11/12 矩阵；Laravel 13 经 composer 约束支持；资源路由、嵌套 group、链式语法、Router 重绑共享 RouteCollection |
 | 缓存         | `array`/`file` 驱动（store 无关，`redis` 复用同一 `Repository` 接口，无专属逻辑）、TTL 正数过期、手动失效、`0` 永久缓存、`cache_ttl=null` 不缓存、keys 索引清理、debug 模式跳过读写 |
+| 管理器页面   | `GET /_forge/manager` 页面渲染、`/api/routes`（含 forge 自身路由过滤与 unassigned 归属）、`/api/config` 读取、配置生成器层级名转义（`php -l` 实测防注入）；仅 `APP_DEBUG=true` 注册 |
 
 ## 8. 版本与发布
 
