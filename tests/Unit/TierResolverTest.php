@@ -6,10 +6,12 @@ namespace RouteForge\Laravel\Tests\Unit;
 
 use Illuminate\Routing\Route;
 use PHPUnit\Framework\TestCase;
+use RouteForge\Laravel\Exceptions\ClassifierException;
 use RouteForge\Laravel\Exceptions\RouteMissingNameException;
 use RouteForge\Laravel\Exceptions\UnknownClassifierTierException;
 use RouteForge\Laravel\Exceptions\UnknownLevelException;
 use RouteForge\Laravel\TierResolver;
+use RuntimeException;
 
 /**
  * TierResolver 单元测试（对应 .docs/SPEC.md §3.1.2 中间件匹配模式与多层级 last-wins）。
@@ -343,5 +345,106 @@ class TierResolverTest extends TestCase
         // 非严格模式：未命中任何规则 → null（即 unassigned 特殊层级）
         $route = $this->makeRoute('/test', [], []);
         $this->assertNull($resolver->resolve($route));
+    }
+
+    // ---------------------------------------------------------------------
+    // 前缀边界：必须按段匹配，'admin' 不得命中 'administrator'
+    // ---------------------------------------------------------------------
+
+    public function test_prefix_matches_by_segment_not_substring(): void
+    {
+        $resolver = $this->makeResolver([
+            'admin' => ['match' => ['prefix' => ['admin']]],
+        ]);
+
+        // 命中：完全等于 / 以 admin/ 开头
+        $this->assertSame('admin', $resolver->resolve($this->makeRoute('admin', [])));
+        $this->assertSame('admin', $resolver->resolve($this->makeRoute('admin/users', [])));
+        // 不命中：同前缀但非独立段
+        $this->assertNull($resolver->resolve($this->makeRoute('administrator', [])));
+        $this->assertNull($resolver->resolve($this->makeRoute('adminx/users', [])));
+    }
+
+    public function test_prefix_list_skips_empty_string_entries(): void
+    {
+        $resolver = $this->makeResolver([
+            'admin' => ['match' => ['prefix' => ['', 'admin']]],
+        ]);
+
+        // 空串前缀被跳过，不应误伤所有路由
+        $this->assertSame('admin', $resolver->resolve($this->makeRoute('admin/x', [])));
+        $this->assertNull($resolver->resolve($this->makeRoute('public/x', [])));
+    }
+
+    // ---------------------------------------------------------------------
+    // DNF 边界：越界索引 / 空子句
+    // ---------------------------------------------------------------------
+
+    public function test_dnf_index_out_of_range_never_matches(): void
+    {
+        $resolver = $this->makeResolver([
+            'admin' => ['match' => [
+                'middleware' => ['auth', 'admin'],
+                'middleware_match' => [[5]],  // 索引越界（列表仅 0/1）
+            ]],
+        ]);
+
+        // 越界索引 → 该合取子句判负 → 整体不命中
+        $this->assertNull($resolver->resolve($this->makeRoute('/x', ['auth', 'admin'])));
+    }
+
+    public function test_dnf_skips_empty_inner_group(): void
+    {
+        $resolver = $this->makeResolver([
+            'admin' => ['match' => [
+                'middleware' => ['auth', 'admin'],
+                'middleware_match' => [[], [0]],  // 第一个空子句应被跳过，第二个 mw[0]=auth 生效
+            ]],
+        ]);
+
+        $this->assertSame('admin', $resolver->resolve($this->makeRoute('/x', ['auth'])));
+        $this->assertNull($resolver->resolve($this->makeRoute('/x', ['web'])));
+    }
+
+    public function test_unknown_middleware_match_string_degrades_to_any(): void
+    {
+        $resolver = $this->makeResolver([
+            'admin' => ['match' => [
+                'middleware' => ['auth', 'admin'],
+                'middleware_match' => 'totally-bogus-mode',
+            ]],
+        ]);
+
+        // 未知模式降级为 any：命中任一即归类
+        $this->assertSame('admin', $resolver->resolve($this->makeRoute('/x', ['admin'])));
+        $this->assertNull($resolver->resolve($this->makeRoute('/x', ['web'])));
+    }
+
+    // ---------------------------------------------------------------------
+    // classifier 返回值/异常处理
+    // ---------------------------------------------------------------------
+
+    public function test_classifier_returning_non_string_falls_through(): void
+    {
+        // 返回非字符串（整数）→ 视为未分类，继续走配置匹配（不报错、不当作层级名）
+        $levels     = ['admin' => ['match' => ['prefix' => ['admin']]]];
+        $classifier = fn($route) => 123;
+        $resolver   = new TierResolver($levels, $classifier);
+
+        $this->assertSame('admin', $resolver->resolve($this->makeRoute('admin/x', [], [])));
+        $this->assertNull($resolver->resolve($this->makeRoute('other', [], [])));
+    }
+
+    public function test_classifier_throwable_is_wrapped_in_classifier_exception(): void
+    {
+        $levels     = ['admin' => ['match' => []]];
+        $classifier = function () {
+            throw new RuntimeException('boom');
+        };
+        $resolver = new TierResolver($levels, $classifier);
+
+        $this->expectException(ClassifierException::class);
+        $this->expectExceptionMessage('Classifier callback threw: boom');
+        $resolver->resolve($this->makeRoute('/x', [], []));
     }
 }

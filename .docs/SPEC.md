@@ -697,12 +697,12 @@ PUT /_forge/manager/api/config   # 更新配置文件
 
 | 测试维度     | 覆盖点                                                                                                                                 |
 |--------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| 层级分配     | 显式 `->tier()`、资源路由（resource/apiResource/singleton）tier、配置 match、`Route::group` 透传、classifier、unassigned 兜底、优先级覆盖、**多层级同时命中取最后一个** |
+| 层级分配     | 显式 `->tier()`、资源路由（resource/apiResource/singleton/apiSingleton）tier 与 `->only()` 组合、配置 match、`Route::group`（数组/链式）透传、classifier（含返回非串降级、抛错包装为 ClassifierException）、unassigned 兜底、优先级覆盖、**多层级同时命中取最后一个** |
 | Artisan 命令 | `route:forge:list` 输出格式（table/json）、按层级过滤、unassigned 路由显示、`--level` 参数过滤                                         |
 | Artisan 命令 | `route:forge:types` 生成 d.ts 二级结构（层级 → 路由名）、`--level` 过滤、`--json` 二级 JSON 输出、`--out` 写文件                       |
 | Artisan 命令 | `route:forge:clear` 全量清除缓存、按层级清除、无效层级名报错                                                                           |
-| 中间件匹配   | `middleware_match` 简单模式（any/all）、高级模式（DNF 数组）、边界情况（空数组、单元素）                                               |
-| 端点响应     | `/_forge/routes/{level}` 返回结构、`/_forge/routes` 摘要端点返回结构、缓存命中、未声明层级 404、层级端点中间件保护、摘要端点中间件保护 |
+| 中间件匹配   | `middleware_match` 简单模式（any/all）、高级模式（DNF 数组）、边界情况（空数组、单元素、**越界索引、空子句跳过、未知模式降级为 any**）；prefix **按段匹配**（`admin` 不命中 `administrator`） |
+| 端点响应     | `/_forge/routes/{level}` 返回结构、`/_forge/routes` 摘要端点返回结构、层级+摘要**缓存命中**、未声明层级 404、层级端点中间件保护、摘要端点中间件保护、**自定义 `endpoint_prefix` 注册与规范化**、`parameter_defaults` 空值序列化为 `{}` |
 | 严格模式     | `strict_mode=true` 未命中抛异常、`false` 未命中归入 unassigned 特殊层级                                                              |
 | Laravel 兼容 | CI（GitHub Actions）跑 PHP 8.2–8.4 × Laravel 11/12 矩阵；Laravel 13 经 composer 约束支持；资源路由、嵌套 group、链式语法、Router 重绑共享 RouteCollection |
 | 缓存         | `array`/`file` 驱动（store 无关，`redis` 复用同一 `Repository` 接口，无专属逻辑）、TTL 正数过期、手动失效、`0` 永久缓存、`cache_ttl=null` 不缓存、keys 索引清理、debug 模式跳过读写 |

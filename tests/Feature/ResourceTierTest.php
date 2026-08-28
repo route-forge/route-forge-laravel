@@ -98,6 +98,46 @@ class ResourceTierTest extends TestCase
         $this->assertArrayHasKey('users.index', $adminRoutes);
     }
 
+    public function test_api_singleton_resource_tier_applies(): void
+    {
+        RouteFacade::apiSingleton('team', 'App\Http\Controllers\TeamController')
+            ->tier('client');
+
+        $routes = $this->get($this->endpoint('client'))->json('routes');
+        // apiSingleton 仅 store/show/update/destroy
+        $this->assertArrayHasKey('team.show', $routes);
+        $this->assertArrayHasKey('team.update', $routes);
+        // 普通 singleton 才有 create，apiSingleton 不含
+        $this->assertArrayNotHasKey('team.create', $routes);
+    }
+
+    public function test_resource_tier_combines_with_only_option(): void
+    {
+        // ->only() 与 ->tier() 组合：只注册指定动作且都带上 tier
+        RouteFacade::resource('books', 'App\Http\Controllers\BookController')
+            ->only(['index', 'show'])
+            ->tier('manage');
+
+        $routes = $this->get($this->endpoint('manage'))->json('routes');
+        $this->assertArrayHasKey('books.index', $routes);
+        $this->assertArrayHasKey('books.show', $routes);
+        // only 过滤掉的动作不应存在
+        $this->assertArrayNotHasKey('books.store', $routes);
+        $this->assertArrayNotHasKey('books.destroy', $routes);
+    }
+
+    public function test_resource_inherits_fluent_group_tier(): void
+    {
+        // 前置链式 group（无显式资源 tier）→ 资源路由继承 group tier
+        RouteFacade::tier('admin')->group(function () {
+            RouteFacade::resource('reports', 'App\Http\Controllers\ReportController');
+        });
+
+        $routes = $this->get($this->endpoint('admin'))->json('routes');
+        $this->assertArrayHasKey('reports.index', $routes);
+        $this->assertArrayHasKey('reports.store', $routes);
+    }
+
     private function endpoint(string $level): string
     {
         return '/_forge/routes/' . $level;

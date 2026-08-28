@@ -155,6 +155,39 @@ class EndpointTest extends TestCase
         $this->assertArrayNotHasKey('public.help', $secondRoutes);
     }
 
+    public function test_summary_cache_hit_avoids_rescan(): void
+    {
+        config()->set('forge.cache_driver', 'array');
+
+        RouteFacade::get('/admin/one', static function () {})
+            ->name('admin.one')
+            ->tier('admin');
+
+        // 首次摘要：扫描并缓存 admin.route_count
+        $firstCount = $this->get($this->summaryEndpoint())->json('levels.admin.route_count');
+        $this->assertSame(1, $firstCount);
+
+        // 缓存写入后再注册一条 admin 路由
+        RouteFacade::get('/admin/two', static function () {})
+            ->name('admin.two')
+            ->tier('admin');
+
+        // 二次摘要：命中缓存，route_count 仍是旧值（未重扫）
+        $secondCount = $this->get($this->summaryEndpoint())->json('levels.admin.route_count');
+        $this->assertSame(1, $secondCount);
+    }
+
+    public function test_endpoint_serializes_empty_parameter_defaults_as_object(): void
+    {
+        // parameter_defaults 经 (object) 强转，空默认值应序列化为 JSON 对象 {} 而非数组 []
+        RouteFacade::get('/admin/users', static function () {})
+            ->name('admin.users.index')
+            ->tier('admin');
+
+        $content = $this->get($this->endpoint('admin'))->getContent();
+        $this->assertStringContainsString('"parameter_defaults":{}', $content);
+    }
+
     public function test_summary_endpoint_returns_scheme_version_levels_config(): void
     {
         RouteFacade::get('/admin/users', static function () {})
