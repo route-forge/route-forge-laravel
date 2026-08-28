@@ -28,6 +28,13 @@ class ListCommandTest extends TestCase
         return [ForgeServiceProvider::class];
     }
 
+    protected function defineEnvironment($app): void
+    {
+        // 开发模式：管理器页面路由（forge.manager.*）也会注册，
+        // 用于验证命令输出不会混入 forge 自身的任何路由
+        $app['config']->set('app.debug', true);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -154,5 +161,20 @@ class ListCommandTest extends TestCase
         $this->assertStringContainsString('orphan', $out);
         $this->assertStringNotContainsString('admin.users.index', $out);
         $this->assertStringNotContainsString('client.dashboard', $out);
+    }
+
+    public function test_forge_internal_routes_excluded_from_output(): void
+    {
+        // APP_DEBUG=true 时 forge.manager.* 四条路由已注册（defineEnvironment），
+        // 命令输出应同时跳过 forge.routes.* 与 forge.manager.* 自身路由
+        [, $out] = $this->runList(['--json' => true]);
+
+        $decoded = json_decode($out, true);
+        $names   = array_column($decoded['routes'], 'name');
+
+        foreach ($names as $name) {
+            $this->assertStringStartsNotWith('forge.', $name, "forge 自身路由 [{$name}] 不应出现在输出中");
+        }
+        $this->assertSame(3, $decoded['count']);
     }
 }

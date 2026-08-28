@@ -105,20 +105,16 @@ readonly class RouteRepository
     }
 
     /**
-     * 失效指定层级缓存；不传参失效全部。
+     * 判断路由名是否为 Route Forge 自身端点（元信息端点 / 管理器页面）。
      *
-     * 摘要端点缓存（route-forge:summary）也需一并失效，
-     * 因为 levels 概览的 route_count（含 unassigned 特殊层级）依赖路由表。
+     * forge.routes.* 与 forge.manager.* 是包内部路由，不应出现在
+     * route:forge:list、route:forge:types 与管理器路由数据中。
+     * Artisan 命令与 RouteRepository 统一使用本方法过滤。
      */
-    public function invalidate(?string $level = null): void
+    public static function isForgeRouteName(string $name): bool
     {
-        if ($level !== null) {
-            $this->cache->forget($level);
-        } else {
-            $this->cache->clear();
-        }
-        // 摘要端点缓存也需失效
-        $this->cache->forget('summary');
+        return str_starts_with($name, 'forge.routes.')
+            || str_starts_with($name, 'forge.manager.');
     }
 
     /**
@@ -240,8 +236,7 @@ readonly class RouteRepository
                 continue;
             }
             // 跳过 forge 自身端点路由
-            if (str_starts_with($name, 'forge.routes.') || str_starts_with($name,
-                    'forge.manager')) {
+            if (self::isForgeRouteName($name)) {
                 continue;
             }
 

@@ -121,25 +121,36 @@ class ForgeRouter extends BaseRouter
     }
 
     /**
-     * 在父类原生合并（namespace/controller/middleware/prefix/where 等）完成之后，
-     * 把当前 group stack 顶层（最近一层 group，已通过 mergeGroup 合并嵌套属性）
-     * 的 tier 字段写入路由 action。
+     * group tier 透传（在父类原生合并之上扩展）。
+     *
+     * 关键坑点：父类 RouteGroup::merge() 对未知 key（含 tier）用 array_merge_recursive
+     * 合并——路由 action 中已有显式 tier（资源路由的 tier 选项经
+     * ForgeResourceRegistrar 写入 action）时，会与 group tier 合并成数组
+     * （如 ['client', 'admin']），TierResolver 将无法识别。
+     *
+     * 因此先摘出路由自身的显式 tier，待父类合并完成（group tier 以 string 写入
+     * action）后再恢复覆盖——显式标注优先级高于分组继承（SPEC §3.1.4）。
      *
      * 签名说明：父类 Laravel Router::mergeGroupAttributesIntoRoute($route) 无参数类型提示
      * 也无返回类型；PHP 重写规则下子类必须保持一致（不能加返回类型，不能加参数类型）。
      */
     protected function mergeGroupAttributesIntoRoute($route): void // phpcs:ignore
     {
-        parent::mergeGroupAttributesIntoRoute($route);
-
-        if (! $this->hasGroupStack()) {
-            return;
+        // 1. 摘出路由自身的显式 tier，避免被 array_merge_recursive 合并成数组
+        $action = $route->getAction();
+        $explicitTier = $action['tier'] ?? null;
+        if ($explicitTier !== null) {
+            unset($action['tier']);
+            $route->setAction($action);
         }
 
-        $attributes = end($this->groupStack);
-        if (is_array($attributes) && isset($attributes['tier']) && is_string($attributes['tier'])) {
+        // 2. 父类原生合并：group stack 顶层的 tier（string）随合并写入 action
+        parent::mergeGroupAttributesIntoRoute($route);
+
+        // 3. 恢复显式 tier（优先级高于分组透传）
+        if (is_string($explicitTier) && $explicitTier !== '') {
             $action = $route->getAction();
-            $action['tier'] = $attributes['tier'];
+            $action['tier'] = $explicitTier;
             $route->setAction($action);
         }
     }

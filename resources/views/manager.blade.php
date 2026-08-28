@@ -411,7 +411,7 @@
     try {
       const res = await fetch(window.location.pathname.replace(/\/$/, '') + '/api/config', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': $('meta[name="csrf-token"]')?.content || '' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ levels, global }),
       });
       const data = await res.json();

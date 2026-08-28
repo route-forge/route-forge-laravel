@@ -153,6 +153,25 @@ class TypesCommandTest extends TestCase
         @unlink($outPath);
     }
 
+    public function test_unassigned_routes_are_not_typed(): void
+    {
+        // unassigned 路由：无显式 tier、不匹配任何层级（SPEC §3.2：不生成类型）
+        RouteFacade::get('/orphan', static function () {})
+            ->name('orphan');
+
+        // d.ts 输出
+        [, $out] = $this->runTypes();
+        $this->assertStringNotContainsString('unassigned: {', $out);
+        $this->assertStringNotContainsString('orphan', $out);
+        // ForgeLevel 联合类型不应包含 unassigned
+        $this->assertStringNotContainsString("'unassigned'", $out);
+
+        // JSON 输出
+        [, $json] = $this->runTypes(['--json' => true]);
+        $decoded = json_decode($json, true);
+        $this->assertArrayNotHasKey('unassigned', $decoded);
+    }
+
     public function test_dts_marks_params_with_defaults_as_optional(): void
     {
         // URL 可选参数 {page?} 带默认值 → TS 应标记 ?

@@ -11,6 +11,9 @@ use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Routing\Contracts\Router as RouterContract;
+use Illuminate\Routing\PendingResourceRegistration;
+use Illuminate\Routing\PendingSingletonResourceRegistration;
+use Illuminate\Routing\ResourceRegistrar;
 use Illuminate\Routing\Route;
 use Illuminate\Routing\Router as BaseRouter;
 use Illuminate\Support\ServiceProvider;
@@ -18,6 +21,7 @@ use RouteForge\Laravel\Cache\RouteCache;
 use RouteForge\Laravel\Console\RouteForgeClearCommand;
 use RouteForge\Laravel\Console\RouteForgeListCommand;
 use RouteForge\Laravel\Console\RouteForgeTypesCommand;
+use RouteForge\Laravel\Exceptions\UnknownLevelException;
 use RouteForge\Laravel\Http\ForgeManagerController;
 use RouteForge\Laravel\Http\RouteMetadataController;
 
@@ -71,8 +75,24 @@ class ForgeServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->rebindRouter();
+        $this->registerResourceRegistrar();
         $this->registerBindings();
         $this->mergeConfigFrom(__DIR__ . '/../config/forge.php', 'forge');
+    }
+
+    /**
+     * 绑定 ForgeResourceRegistrar 为容器中的 ResourceRegistrar 实现。
+     *
+     * Router::resource() / Router::singleton() 优先从容器解析 registrar，
+     * 绑定后资源路由的注册经由 ForgeResourceRegistrar 完成，
+     * 使 options 中的 tier 流入每条资源路由的 action（配套 registerTierMacro 的宏）。
+     */
+    protected function registerResourceRegistrar(): void
+    {
+        $this->app->singleton(ResourceRegistrar::class, function ($app) {
+            /** @var Container $app */
+            return new ForgeResourceRegistrar($app->make('router'));
+        });
     }
 
     /**
@@ -165,6 +185,11 @@ class ForgeServiceProvider extends ServiceProvider
     /**
      * 注册 `->tier()` 宏到 Illuminate\Routing\Route。
      * 仅向 action 数组写入一个 `tier` 字段，零侵入。
+     *
+     * 同时向 PendingResourceRegistration / PendingSingletonResourceRegistration
+     * 注册 tier() 宏，让 `Route::resource(...)->tier('x')` 链式写法生效
+     * （SPEC §3.1.1：链式调用对资源路由同样生效）。tier 经 options 流入
+     * ForgeResourceRegistrar，注册时写入每条资源路由的 action。
      */
     protected function registerTierMacro(): void
     {
@@ -175,6 +200,22 @@ class ForgeServiceProvider extends ServiceProvider
             $this->setAction($action);
             return $this;
         });
+
+        $resourceTier = function (string $tier) {
+            $levels = config('forge.levels', []);
+            if (!isset($levels[$tier])) {
+                throw new UnknownLevelException(
+                    'Cannot set tier [' . $tier . ']: not defined in levels config. '
+                    . 'Available levels: ' . implode(', ', array_keys($levels)),
+                );
+            }
+            /** @phpstan-ignore-next-line 宏经 Macroable 绑定 $this，可访问 protected $options */
+            $this->options['tier'] = $tier;
+            return $this;
+        };
+
+        PendingResourceRegistration::macro('tier', $resourceTier);
+        PendingSingletonResourceRegistration::macro('tier', $resourceTier);
     }
 
     /**

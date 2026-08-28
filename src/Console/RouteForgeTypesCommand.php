@@ -7,6 +7,7 @@ namespace RouteForge\Laravel\Console;
 use Illuminate\Console\Command;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\File;
+use RouteForge\Laravel\RouteRepository;
 use RouteForge\Laravel\TierResolver;
 
 /**
@@ -46,11 +47,16 @@ class RouteForgeTypesCommand extends Command
             if ($name === null || $name === '') {
                 continue;
             }
-            if (str_starts_with($name, 'forge.routes.')) {
+            if (RouteRepository::isForgeRouteName($name)) {
                 continue;
             }
 
             $level = $resolver->resolve($route);
+
+            // unassigned 路由不生成类型（SPEC §3.2：无层级归属，不进入 ForgeRoutes 映射）
+            if ($level === null) {
+                continue;
+            }
 
             // --level 过滤：仅包含指定层级的路由
             if ($filterLevel !== null && $filterLevel !== '' && $level !== $filterLevel) {

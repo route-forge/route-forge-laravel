@@ -20,7 +20,7 @@ monorepo**（[github.com/xyj2156/route-forge](https://github.com/xyj2156/route-f
 
 - 前端包（`@route-forge/core`、`@route-forge/vue`）仍在原 monorepo 中维护；
 - 规划文档随拆分迁移至本仓库 [`.docs`](./.docs) 目录，作为前后端契约的单一真相源：
-  - [`.docs/SPEC.md`](./.docs/SPEC.md)：功能规格说明书（本仓库对应 §3 后端功能、§5.1 配置项、§6.1 错误码）；
+  - [`.docs/SPEC.md`](./.docs/SPEC.md)：功能规格说明书（本仓库对应 §3 后端功能、§5 配置项、§6 错误码）；
   - [`.docs/DESIGN.md`](./.docs/DESIGN.md)：设计思路与关键技术决策。
 
 ## 功能概览
@@ -152,17 +152,19 @@ php artisan route:forge:clear
 
 ## 主要配置项（config/forge.php）
 
-| 键                | 类型             | 默认值             | 说明                                           |
-|-------------------|------------------|--------------------|------------------------------------------------|
-| `levels`          | `array`          | 见配置文件         | 层级定义表（匹配规则、加载策略）               |
-| `endpoint_prefix` | `string`         | `'/_forge/routes'` | 路由元信息对外端点前缀，同时也是摘要路由       |
-| `cache_ttl`       | `int\|null`      | `3600`             | 统一缓存 TTL（秒）；null 不缓存，负值视为 null |
-| `cache_driver`    | `string\|null`   | `null`             | 缓存驱动；null 使用默认驱动                    |
-| `strict_mode`     | `bool`           | `false`            | 未命中层级时抛异常（true）或归入 unassigned（false） |
-| `scheme_version`  | `int`            | `1`                | 摘要端点响应格式版本（schemeVersion）          |
-| `classifier`      | `callable\|null` | `null`             | 自定义分类回调 `fn(Route $r): ?string`         |
+| 键                  | 类型             | 默认值             | 说明                                           |
+|---------------------|------------------|--------------------|------------------------------------------------|
+| `levels`            | `array`          | 见配置文件         | 层级定义表（匹配规则、加载策略）               |
+| `endpoint_prefix`   | `string`         | `'/_forge/routes'` | 路由元信息对外端点前缀，同时也是摘要路由       |
+| `url_prefix`        | `string\|null`   | `null`             | 应用路由前缀，经摘要端点下发；支持完整 URL 或路径前缀，空则不下发 |
+| `endpoint_middleware` | `string[]`     | `[]`               | 摘要端点中间件；空数组或 null 不限制           |
+| `cache_ttl`         | `int\|null`      | `3600`             | 统一缓存 TTL（秒）；null 不缓存，`0` 永久缓存，负值视为 null |
+| `cache_driver`      | `string\|null`   | `null`             | 缓存驱动；null 使用默认驱动                    |
+| `strict_mode`       | `bool`           | `false`            | 未命中层级时抛异常（true）或归入 unassigned（false） |
+| `scheme_version`    | `int`            | `1`                | 摘要端点响应格式版本（schemeVersion）          |
+| `classifier`        | `callable\|null` | `null`             | 自定义分类回调 `fn(Route $r): ?string`         |
 
-完整配置项参考见 [`.docs/SPEC.md` §5.1](./.docs/SPEC.md)。
+完整配置项参考（含 `levels.{name}.*` 子键）见 [`.docs/SPEC.md` §5](./.docs/SPEC.md)。
 
 ### 开发模式
 

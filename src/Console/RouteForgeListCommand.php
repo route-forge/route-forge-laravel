@@ -6,6 +6,7 @@ namespace RouteForge\Laravel\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Routing\Router;
+use RouteForge\Laravel\RouteRepository;
 use RouteForge\Laravel\TierResolver;
 
 /**
@@ -43,8 +44,8 @@ class RouteForgeListCommand extends Command
             if ($name === null || $name === '') {
                 continue;
             }
-            // 跳过 forge 自身元信息端点路由
-            if (str_starts_with($name, 'forge.routes.')) {
+            // 跳过 forge 自身端点路由（元信息端点 / 管理器页面）
+            if (RouteRepository::isForgeRouteName($name)) {
                 continue;
             }
 

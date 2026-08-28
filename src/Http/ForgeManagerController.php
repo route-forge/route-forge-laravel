@@ -229,12 +229,15 @@ PHP;
 
     /**
      * 格式化单个层级配置条目。
+     *
+     * 层级名经 var_export 转义后拼入，避免特殊字符破坏
+     * 生成的 PHP 文件语法（甚至注入代码）。
      */
     private function formatLevelEntry(string $name, array $config): string
     {
         $i       = '        '; // 8-space indent
         $lines   = [];
-        $lines[] = "{$i}'{$name}' => [";
+        $lines[] = "{$i}" . var_export($name, true) . ' => [';
 
         $lines[] = "{$i}    'description' => " . var_export($config['description'] ?? '',
                 true) . ',';
