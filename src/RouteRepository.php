@@ -22,7 +22,7 @@ use RouteForge\Laravel\Cache\RouteCache;
 readonly class RouteRepository
 {
     /**
-     * 特殊层级名：未命中任何层级的命名路由归属此层级（仅 fallback_level=null 时存在），
+     * 特殊层级名：未命中任何层级的命名路由归属此层级，
      * 通过与已定义层级相同的端点格式获取：GET /{endpoint_prefix}/unassigned
      */
     public const UNASSIGNED_LEVEL = 'unassigned';
@@ -44,7 +44,7 @@ readonly class RouteRepository
      * 取某层级下所有命名路由的元信息（带缓存）。
      *
      * level 支持特殊值 unassigned：返回所有未命中层级的命名路由，
-     * 响应结构与已定义层级完全一致（fallback_level 非 null 时 routes 为空）。
+     * 响应结构与已定义层级完全一致。
      *
      * @return array{
      *   level:string,
@@ -161,9 +161,9 @@ readonly class RouteRepository
             ];
         }
 
-        // unassigned 特殊层级：与已定义层级结构一致，明细经其层级端点另行获取
+        // unassigned 特殊层级：与已定义层级结构一致
         $levelsSummary[self::UNASSIGNED_LEVEL] = [
-            'description' => '未命中任何层级的路由（fallback_level=null）',
+            'description' => '未命中任何层级的路由',
             'load'        => 'lazy',
             'route_count' => $levelRouteCounts['unassigned'],
             'route'       => [
@@ -269,18 +269,13 @@ readonly class RouteRepository
     /**
      * unassigned 特殊层级的路由元信息（按路由名索引，与层级端点 routes 结构一致）。
      *
-     * 当 fallback_level=null 时，tierResolver->resolve() 返回 null 的命名路由
-     * 即为"未分配"。fallback_level 非 null 时所有路由都有层级，返回空数组。
+     * tierResolver->resolve() 返回 null 的命名路由即为"未分配"，
+     * strict_mode=false 时未命中任何层级的路由统一归入此特殊层级。
      *
      * @return array<string,array{uri:string,methods:string[],parameters:string[],parameter_defaults:array<string,mixed>}>
      */
     public function getUnassignedRoutes(): array
     {
-        $fallback = config('forge.fallback_level');
-        if ($fallback !== null) {
-            return [];
-        }
-
         $unassigned = [];
         foreach ($this->router->getRoutes() as $route) {
             $name = $route->getName();

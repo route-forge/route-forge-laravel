@@ -47,7 +47,6 @@ class ForgeManagerController extends Controller
                 'cache_ttl'       => config('forge.cache_ttl'),
                 'cache_driver'    => config('forge.cache_driver'),
                 'strict_mode'     => (bool)config('forge.strict_mode', false),
-                'fallback_level'  => config('forge.fallback_level'),
                 'scheme_version'  => (int)config('forge.scheme_version', 1),
             ],
         ]);
@@ -79,7 +78,6 @@ class ForgeManagerController extends Controller
                 'cache_ttl'       => config('forge.cache_ttl'),
                 'cache_driver'    => config('forge.cache_driver'),
                 'strict_mode'     => (bool)config('forge.strict_mode', false),
-                'fallback_level'  => config('forge.fallback_level'),
                 'scheme_version'  => (int)config('forge.scheme_version', 1),
             ],
         ]);
@@ -131,7 +129,6 @@ class ForgeManagerController extends Controller
         $cacheTtl       = $this->exportScalar($global['cache_ttl'] ?? 3600);
         $cacheDriver    = $this->exportScalar($global['cache_driver'] ?? null);
         $strictMode     = ($global['strict_mode'] ?? false) ? 'true' : 'false';
-        $fallbackLevel  = $this->exportScalar($global['fallback_level'] ?? null);
         $schemeVersion  = (int)($global['scheme_version'] ?? 1);
 
         return <<<PHP
@@ -194,13 +191,6 @@ return [
     |--------------------------------------------------------------------------
     */
     'strict_mode'       => {$strictMode},
-
-    /*
-    |--------------------------------------------------------------------------
-    | 兜底层级名
-    |--------------------------------------------------------------------------
-    */
-    'fallback_level'    => {$fallbackLevel},
 
     /*
     |--------------------------------------------------------------------------

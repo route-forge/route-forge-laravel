@@ -136,23 +136,11 @@ return [
     |--------------------------------------------------------------------------
     |
     | true  = 未命中层级的路由抛 RouteTierNotAssignedException。
-    | false = 未命中路由归入 fallback_level（非 null 时）或「未分配」分组。
+    | false = 未命中路由归入 unassigned 特殊层级，
+    |         经 GET /{endpoint_prefix}/unassigned 获取（见 SPEC §3.1.6）。
     |
     */
     'strict_mode'       => env('FORGE_STRICT_MODE', false),
-
-    /*
-    |--------------------------------------------------------------------------
-    | 兜底层级名
-    |--------------------------------------------------------------------------
-    |
-    | strict_mode=false 时生效。
-    | null   = 不兜底，未命中路由归入 unassigned 特殊层级，
-    |          经 GET /{endpoint_prefix}/unassigned 获取（见 SPEC §3.1.6）。
-    | 非 null = 未命中路由归入指定层级。
-    |
-    */
-    'fallback_level'    => env('FORGE_FALLBACK_LEVEL'),
 
     /*
     |--------------------------------------------------------------------------

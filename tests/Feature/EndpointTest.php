@@ -22,8 +22,7 @@ use RouteForge\Laravel\ForgeServiceProvider;
  * 说明：
  *   - ForgeServiceProvider::boot() 已注册元信息端点 GET /{endpoint_prefix}/{level}
  *     （默认 endpoint_prefix = '_forge/routes'），命名 forge.routes.show。
- *   - 默认配置下 strict_mode=false、fallback_level='public'，
- *     故 forge.routes.show 自身会被归类到 public，不会污染 admin 等层级。
+ *   - 默认配置下 strict_mode=false，未命中层级的路由归入 unassigned 特殊层级。
  */
 class EndpointTest extends TestCase
 {
@@ -118,7 +117,6 @@ class EndpointTest extends TestCase
     public function test_strict_mode_unassigned_route_returns_500(): void
     {
         config()->set('forge.strict_mode', true);
-        config()->set('forge.fallback_level', null);
 
         // 用户注册的未声明 tier 的命名路由；不匹配任何 prefix/middleware
         RouteFacade::get('/orphan', static function () {})
@@ -248,19 +246,22 @@ class EndpointTest extends TestCase
         $this->assertArrayHasKey('parameter_defaults', $route);
     }
 
-    public function test_unassigned_level_empty_when_fallback_level_set(): void
+    public function test_unassigned_level_reflects_routes_across_requests(): void
     {
-        config(['forge.fallback_level' => 'public']);
+        // fallback_level 已移除：unassigned 是唯一的兜底机制，
+        // 未命中层级的命名路由始终可在 unassigned 特殊层级查到。
+        RouteFacade::get('/orphan-a', static function () {})
+            ->name('orphan.a');
+        RouteFacade::get('/orphan-b', static function () {})
+            ->name('orphan.b');
 
-        RouteFacade::get('/orphan', static function () {})
-            ->name('orphan');
-
-        // fallback_level 非 null 时所有路由都有层级，unassigned 特殊层级为空
         $summary = $this->get($this->summaryEndpoint())->json();
-        $this->assertSame(0, $summary['levels']['unassigned']['route_count']);
+        // ≥2：orphan-a/orphan-b（另含 forge 自身端点路由，不精确断言总数）
+        $this->assertGreaterThanOrEqual(2, $summary['levels']['unassigned']['route_count']);
 
         $routes = $this->get($this->endpoint('unassigned'))->json('routes');
-        $this->assertSame([], $routes);
+        $this->assertArrayHasKey('orphan.a', $routes);
+        $this->assertArrayHasKey('orphan.b', $routes);
     }
 
     public function test_summary_endpoint_url_prefix_null_by_default(): void

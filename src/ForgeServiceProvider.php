@@ -147,7 +147,6 @@ class ForgeServiceProvider extends ServiceProvider
                 levelsConfig: $app->make('config')->get('forge.levels', []),
                 classifier: $classifier instanceof Closure ? $classifier : null,
                 strictMode: (bool) $app->make('config')->get('forge.strict_mode', false),
-                fallbackLevel: $app->make('config')->get('forge.fallback_level'),
             );
         });
 

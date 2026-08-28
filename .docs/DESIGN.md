@@ -143,8 +143,12 @@ Laravel 路由定义里天然包含 HTTP 方法（GET/POST/PUT/DELETE），没�
 | Laravel 大版本升级导致 API 变动      | 抽象一层适配器；CI 跑 Laravel 9/10/11 三矩阵               |
 | 开源项目维护疲劳                     | 设定清晰的 Roadmap；拒绝超出定位的 feature request         |
 | TS 类型推导在某些边界情况下失败      | 提供 escape hatch（`api<any>(...)`），但不鼓励             |
-| `fallback_level=null` 暴露未标记路由 | 文档建议生产环境开启 `strict_mode=true` 或显式标记所有路由 |
+| unassigned 兜底暴露未标记路由       | 文档建议生产环境开启 `strict_mode=true` 或显式标记所有路由 |
 | `levels` 数组顺序影响多命中结果      | 文档明确"后定义覆盖前定义"语义；测试矩阵覆盖多命中场景     |
+
+> 设计变更记录：早期版本曾提供 `fallback_level` 配置（未命中路由兜底到指定层级），
+> 因与 `unassigned` 特殊层级语义重复且增加心智负担，已移除。未命中层级路由统一归入
+> `unassigned`，经 `GET /{endpoint_prefix}/unassigned` 获取。
 
 ## 8. 长期愿景
 

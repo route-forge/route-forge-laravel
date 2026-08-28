@@ -22,7 +22,8 @@ use Throwable;
  *   2. Route::group 的 tier 选项（同样写入 action['tier']，等价语法糖）
  *   3. classifier 自定义回调返回非 null 值
  *   4. 配置 match 规则匹配（prefix / middleware，middleware_match 支持 any/all/DNF；多层级命中取最后一个 = last-wins）
- *   5. fallback_level 兜底（仅 strict_mode=false 时生效）
+ *   5. 未命中：strict_mode=false 时归入 unassigned 特殊层级（resolve 返回 null）；
+ *      strict_mode=true 时抛 RouteTierNotAssignedException
  */
 readonly class TierResolver
 {
@@ -30,15 +31,7 @@ readonly class TierResolver
         private array    $levelsConfig,
         private ?Closure $classifier = null,
         private bool     $strictMode = false,
-        private ?string  $fallbackLevel = null,
-    ) {
-        if ($this->fallbackLevel !== null && !isset($this->levelsConfig[$this->fallbackLevel])) {
-            throw new UnknownLevelException(
-                'fallback_level [' . $this->fallbackLevel . '] is not defined in levels config. '
-                . 'Available levels: ' . implode(', ', array_keys($this->levelsConfig)),
-            );
-        }
-    }
+    ) {}
 
     /**
      * 解析一条路由的最终层级。
@@ -113,11 +106,7 @@ readonly class TierResolver
             return $matched;
         }
 
-        // 5：兜底
-        if (!$this->strictMode && $this->fallbackLevel !== null) {
-            return $this->fallbackLevel;
-        }
-
+        // 5：未命中——strict_mode=true 抛异常；否则归入 unassigned 特殊层级（返回 null）
         if ($this->strictMode) {
             throw new RouteTierNotAssignedException(
                 'Route ' . $route->getName() . ' (' . $route->uri() . ') has no tier assigned'

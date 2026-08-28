@@ -361,7 +361,6 @@
       { k: 'cache_ttl', l: '缓存 TTL (秒)', t: 'number', v: g.cache_ttl ?? 3600 },
       { k: 'cache_driver', l: '缓存驱动', t: 'text', v: g.cache_driver || '' },
       { k: 'scheme_version', l: '格式版本', t: 'number', v: g.scheme_version },
-      { k: 'fallback_level', l: '兜底层级', t: 'text', v: g.fallback_level || '' },
       { k: 'strict_mode', l: '严格模式', t: 'check', v: !!g.strict_mode },
     ];
     $('#gf').innerHTML = fields.map(f => f.t === 'check' ? `<div class="fd fdc"><input type="checkbox" id="cf-${f.k}" data-k="${f.k}" ${f.v ? 'checked' : ''}><label for="cf-${f.k}">${f.l}</label></div>` : `<div class="fd"><label>${f.l}</label><input type="${f.t}" id="cf-${f.k}" data-k="${f.k}" value="${esc(String(f.v))}"></div>`).join('');

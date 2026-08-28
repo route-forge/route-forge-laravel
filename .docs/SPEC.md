@@ -7,7 +7,7 @@
 **Route Forge for Laravel** 是 Laravel 命名路由的全链路后端解决方案，提供：
 
 - 路由分级（tier）分配：三种互相兼容的分配方式（显式 `->tier()` 宏、`Route::group` 透传、配置文件批量匹配）
-- 五级优先级：显式标注 > 分组继承 > 自定义回调 > 配置匹配 > 兜底/未分配
+- 五级优先级：显式标注 > 分组继承 > 自定义回调 > 配置匹配 > unassigned 兜底
 - 元信息端点：按层级返回路由元信息（名称 + URI + method + 参数），供前端按需懒加载
 - 摘要端点：返回所有层级概览与全局配置，供前端初始化自动发现
 - 统一缓存：所有层级端点与摘要端点共享同一 TTL 配置，支持多种缓存驱动
@@ -100,7 +100,6 @@ return [
     'cache_ttl'       => 3600,              // 统一缓存 TTL（秒），null=不缓存
     'cache_driver'    => null,              // null=使用默认缓存驱动
     'strict_mode'     => false,             // 严格模式：未命中层级即抛异常
-    'fallback_level'  => null,              // null=未命中路由归入「未分配」分组；非 null 则归入指定层级
     'classifier'      => null,              // 自定义分类回调，签名 fn(Route $r): ?string
 ];
 ```
@@ -112,8 +111,7 @@ return [
 - 显式 `->tier()` 标记优先级最高，覆盖配置匹配结果（见 3.1.4）。
 - 多个层级同时命中时，按 `levels` 数组定义顺序取最后一个（后定义覆盖前定义，与 `Route::group`
   内层覆盖外层的语义一致；追加新层级时无需调整已有层级的顺序）。
-- 全部未命中：`strict_mode=true` 抛 `RouteTierNotAssignedException`；`strict_mode=false` 时，若 `fallback_level` 非 null
-  则归入该层级，若为 null 则归入「未分配」分组。
+- 全部未命中：`strict_mode=true` 抛 `RouteTierNotAssignedException`；`strict_mode=false` 时归入 `unassigned` 特殊层级（唯一的兜底机制，见 §3.1.4）。
 - `classifier` 回调优先级介于「显式 `->tier()` / `Route::group` tier」与「配置 match」之间（完整五级优先级见
   §3.1.4），用于实现复杂自定义分类逻辑（如基于 Controller 命名空间归类）。 **注意**：由于显式 `->tier()`
   会直接返回不继续匹配，classifier 实际无法覆盖显式 tier，仅对未显式标注的路由生效。返回的层级名必须在
@@ -213,13 +211,14 @@ Route::group(['tier' => 'admin'], function () {
 2. **`Route::group`** **的** **`tier`** **选项**（继承自最近一层 group，内层覆盖外层）
 3. **`classifier`** **自定义回调**返回非 null 值
 4. **配置文件** **`match`** **规则**匹配（受 `middleware_match` 控制）
-5. **兜底**：`fallback_level` 非 null 时归入指定层级；`fallback_level=null` 时归入 `unassigned` 特殊层级（经层级端点获取，见 §3.1.5 / §3.1.6）
+5. **兜底**：归入 `unassigned` 特殊层级（经层级端点获取，见 §3.1.5 / §3.1.6）
 
-> 优先级设计意图：显式标注胜过隐式分组，分组胜过全局规则，全局规则胜过兜底。`fallback_level=null`
-> 的设计允许项目不做兜底分配——未标记路由仍可被前端调用，只是需要通过摘要端点中的 `unassigned` 特殊层级发现，
+> 优先级设计意图：显式标注胜过隐式分组，分组胜过全局规则，全局规则胜过兜底。
+> 未标记路由仍可被前端调用，只需通过摘要端点中的 `unassigned` 特殊层级发现，
 > 并经其层级端点（`GET /{endpoint_prefix}/unassigned`）获取明细。
+> 兜底机制只有 unassigned 一种（早期版本的 `fallback_level` 配置因与之语义重复已移除）。
 >
-> ⚠️ 安全考量：`fallback_level=null` 时未标记路由会通过 `unassigned` 层级端点暴露路由名和 URI 模板。生产环境建议配合 `strict_mode=true`
+> ⚠️ 安全考量：未标记路由会通过 `unassigned` 层级端点暴露路由名和 URI 模板。生产环境建议配合 `strict_mode=true`
 > 或显式标记所有路由，避免信息泄露。
 
 #### 3.1.5 层级元信息查询端点
@@ -230,7 +229,7 @@ Route::group(['tier' => 'admin'], function () {
 GET /_forge/routes/{level}   # 返回该层级下所有命名路由的元信息
 ```
 
-`{level}` 支持特殊值 `unassigned`：返回所有未命中任何层级的命名路由，响应结构与已定义层级完全一致。仅 `fallback_level=null` 时存在未分配路由；`fallback_level` 非 null 时 `routes` 为空对象。
+`{level}` 支持特殊值 `unassigned`：返回所有未命中任何层级的命名路由，响应结构与已定义层级完全一致。
 
 返回示例：
 
@@ -349,7 +348,7 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
       }
     },
     "unassigned": {
-      "description": "未命中任何层级的路由（fallback_level=null）",
+      "description": "未命中任何层级的路由",
       "load": "lazy",
       "route_count": 1,
       "route": {
@@ -371,7 +370,7 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
 
 + `schemeVersion`：摘要端点响应格式版本号，默认 `1`。后续迭代引入不兼容的格式变更时递增，前端应据此字段识别格式版本并做兼容处理。
 + `levels`：各层级摘要。`description` 层级描述、`load` 加载策略（eager/lazy）、`route_count` 该层级路由数量、`route` 该层级元信息端点的请求信息（`uri` + `methods`），前端可据此直接构造请求获取该层级的全量路由数据。
-  - `unassigned`：特殊层级，与已定义层级结构完全一致，汇总所有未命中任何层级的命名路由（仅 `fallback_level=null` 时 `route_count` 可能大于 0）。其路由明细不在摘要中内联返回，前端按 `route` 字段另行请求 `GET /{endpoint_prefix}/unassigned` 获取（见 §3.1.5）。
+  - `unassigned`：特殊层级，与已定义层级结构完全一致，汇总所有未命中任何层级的命名路由。其路由明细不在摘要中内联返回，前端按 `route` 字段另行请求 `GET /{endpoint_prefix}/unassigned` 获取（见 §3.1.5）。
 + `config`：后端全局配置摘要。前端初始化时读取此字段作为最高优先级配置源（见 §5.3 分级覆盖策略）。当前包含
   `strict_mode`、`endpoint_prefix`、`url_prefix` 和 `cache_ttl`，后续版本可扩展。
   - `url_prefix`：应用的路由前缀，支持两种格式——完整 URL（含协议和域名，如
@@ -410,8 +409,8 @@ php artisan route:forge:list --unassigned
 
 - 数据源：直接从 Laravel 路由注册表（`Route::getRoutes()`）读取， **不需要启动 HTTP 服务**，离线可用。
 - 层级分配逻辑与运行时完全一致（遵循 §3.1.4 五级优先级）。
-- `--level` 过滤时，若层级名不存在则提示可用层级列表。
-- `--unassigned` 仅在 `fallback_level=null` 时有意义；`fallback_level` 非 null 时所有路由都有层级，此参数输出为空。
+- `--level` 过滤时，若层级名不存在则提示可用层级列表；`unassigned` 特殊层级也可作为 `--level` 过滤值。
+- `--unassigned` 仅显示未命中任何层级的路由，与 `--level=unassigned` 等价。
 - 未分配路由在 table 输出中以 `unassigned` 显示（与 JSON 输出及特殊层级名保持一致）。
 
 ##### `--json` 输出结构
@@ -442,7 +441,7 @@ php artisan route:forge:list --unassigned
 
 字段说明：
 
-- `levels`：当前可用层级列表（含 `unassigned` 特殊层级，仅 `fallback_level=null` 时包含）。
+- `levels`：当前可用层级列表（始终含 `unassigned` 特殊层级）。
 - `filter`：当前过滤条件（`--level` / `--unassigned`），无过滤时为 `null`。
 - `count`：匹配路由总数。
 - `routes`：路由条目数组，每条含 `name`、`level`（未分配为 `"unassigned"`）、`methods`、`uri`。
@@ -645,8 +644,7 @@ PUT /_forge/manager/api/config   # 更新配置文件
 | `endpoint_middleware`                  | `string[]`                   | `[]`               | 摘要端点（`GET /{endpoint_prefix}`）中间件；空数组或 null 不限制                                                                                                                                  |
 | `cache_ttl`                            | `int\|null`                  | `3600`             | 统一缓存 TTL（秒）；`null` 不缓存，`0` 永久缓存，负值视为 `null`（不缓存）。同时作用于所有层级端点与摘要端点。⚠️ `0` 遵循 Laravel Cache TTL 惯例（永久），非 HTTP `Cache-Control: max-age=0` 含义 |
 | `cache_driver`                         | `string\|null`               | `null`             | 缓存驱动；`null` 用默认驱动，可指定 `redis`/`file`/`array` 等                                                                                                                                     |
-| `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 fallback/unassigned（false）                                                                                                                           |
-| `fallback_level`                       | `string\|null`               | `null`             | 兜底层级名；`null` 时未命中路由归入 `unassigned` 特殊层级（经 `GET /{endpoint_prefix}/unassigned` 获取，见 §3.1.6）；非 null 则归入指定层级                                                       |
+| `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 `unassigned` 特殊层级（false）                                                                                                                         |
 | `scheme_version`                       | `int`                        | `1`                | 摘要端点返回的响应格式版本号（`schemeVersion` 字段）；后续迭代引入不兼容的格式变更时递增，前端据此做版本兼容                                                                                      |
 | `classifier`                           | `callable\|null`             | `null`             | 自定义分类回调，签名 `fn(Route $r): ?string`，返回层级名或 null。返回的层级名必须在 `levels` 配置中存在，否则抛 `UnknownClassifierTierException`                                                  |
 
@@ -668,13 +666,13 @@ PUT /_forge/manager/api/config   # 更新配置文件
 
 | 测试维度     | 覆盖点                                                                                                                                 |
 |--------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| 层级分配     | 显式 `->tier()`、配置 match、`Route::group` 透传、classifier、fallback/unassigned、优先级覆盖、**多层级同时命中取最后一个**            |
+| 层级分配     | 显式 `->tier()`、配置 match、`Route::group` 透传、classifier、unassigned 兜底、优先级覆盖、**多层级同时命中取最后一个**                 |
 | Artisan 命令 | `route:forge:list` 输出格式（table/json）、按层级过滤、unassigned 路由显示、`--level` 参数过滤                                         |
 | Artisan 命令 | `route:forge:types` 生成 d.ts 二级结构（层级 → 路由名）、`--level` 过滤、`--json` 二级 JSON 输出、`--out` 写文件                       |
 | Artisan 命令 | `route:forge:clear` 全量清除缓存、按层级清除、无效层级名报错                                                                           |
 | 中间件匹配   | `middleware_match` 简单模式（any/all）、高级模式（DNF 数组）、边界情况（空数组、单元素）                                               |
 | 端点响应     | `/_forge/routes/{level}` 返回结构、`/_forge/routes` 摘要端点返回结构、缓存命中、未声明层级 404、层级端点中间件保护、摘要端点中间件保护 |
-| 严格模式     | `strict_mode=true` 未命中抛异常、`false` + `fallback_level=null` 归入 unassigned、`false` + `fallback_level` 非 null 归入指定层级      |
+| 严格模式     | `strict_mode=true` 未命中抛异常、`false` 未命中归入 unassigned 特殊层级                                                              |
 | Laravel 兼容 | Laravel 11/12/13 三版本矩阵；资源路由、嵌套 group、命名空间                                                                            |
 | 缓存         | `cache_driver` 各驱动（redis/file/array）、TTL 过期、手动失效、`0` 永久缓存、`cache_ttl=null` 不缓存                                   |
 

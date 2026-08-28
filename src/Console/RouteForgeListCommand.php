@@ -24,14 +24,13 @@ class RouteForgeListCommand extends Command
     public function handle(Router $router, TierResolver $resolver): int
     {
         $levels = array_keys(config('forge.levels', []));
-        $fallback = config('forge.fallback_level');
 
         $filterLevel = $this->option('level');
         $onlyUnassigned = (bool) $this->option('unassigned');
         $asJson = (bool) $this->option('json');
 
-        // level 过滤校验
-        if ($filterLevel !== null && $filterLevel !== '' && !in_array($filterLevel, $levels, true)) {
+        // level 过滤校验（unassigned 特殊层级合法）
+        if ($filterLevel !== null && $filterLevel !== '' && !in_array($filterLevel, array_merge($levels, ['unassigned']), true)) {
             $this->error("Unknown level: {$filterLevel}");
             $this->line('Available levels: ' . (empty($levels) ? '(none)' : implode(', ', $levels)));
             return 1;
@@ -55,8 +54,9 @@ class RouteForgeListCommand extends Command
                 fn ($m) => strtoupper($m) !== 'HEAD'
             ));
 
-            // --level 过滤
-            if ($filterLevel !== null && $filterLevel !== '' && $level !== $filterLevel) {
+            // --level 过滤（unassigned 特殊层级可与 --level=unassigned 对齐）
+            $displayLevel = $level ?? 'unassigned';
+            if ($filterLevel !== null && $filterLevel !== '' && $displayLevel !== $filterLevel) {
                 continue;
             }
 
@@ -67,23 +67,14 @@ class RouteForgeListCommand extends Command
 
             $rows[] = [
                 'name' => $name,
-                // null → 'unassigned' 统一输出，与 SPEC §3.1.5 unassigned 特殊层级语义一致
-                'level' => $level ?? 'unassigned',
+                'level' => $displayLevel,
                 'methods' => $methods,
                 'uri' => $route->uri(),
             ];
         }
 
-        // --unassigned + fallback 非 null 时输出为空
-        if ($onlyUnassigned && $fallback !== null) {
-            $rows = [];
-        }
-
-        // 当前可用层级（含 unassigned 特殊层级）
-        $availableLevels = $levels;
-        if ($fallback === null) {
-            $availableLevels[] = 'unassigned';
-        }
+        // 当前可用层级（始终含 unassigned 特殊层级）
+        $availableLevels = array_merge($levels, ['unassigned']);
 
         // 过滤条件描述
         $filter = [];

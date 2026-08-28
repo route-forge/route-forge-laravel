@@ -70,7 +70,7 @@ class TierResolverTest extends TestCase
             'admin' => ['match' => ['middleware' => ['auth', 'admin'], 'middleware_match' => 'any']],
         ]);
 
-        // 无 prefix、无任何匹配中间件 → 不命中；无 fallback 且非 strict → null
+        // 无 prefix、无任何匹配中间件 → 不命中；非 strict → null（unassigned）
         $route = $this->makeRoute('/x', []);
         $this->assertNull($resolver->resolve($route));
     }
@@ -224,7 +224,7 @@ class TierResolverTest extends TestCase
             'bogus' => ['match' => []],
         ]);
 
-        // 空 match 不应全量命中；非 strict、无 fallback → null
+        // 空 match 不应全量命中；非 strict → null（unassigned）
         $this->assertNull($resolver->resolve($this->makeRoute('/anything', ['any.mw'])));
     }
 
@@ -261,7 +261,7 @@ class TierResolverTest extends TestCase
 
         // 无 tier 无 name 在 strict 模式下走的是 RouteTierNotAssignedException 路径
         // 但前提是没有命中任何层级——这里空配置，所以会走兖底逻辑
-        // strict_mode=true 且无 fallback → 抛 RouteTierNotAssignedException
+        // strict_mode=true 且未命中层级 → 抛 RouteTierNotAssignedException
         $this->expectException(\RouteForge\Laravel\Exceptions\RouteTierNotAssignedException::class);
         $resolver->resolve($route);
     }
@@ -331,35 +331,17 @@ class TierResolverTest extends TestCase
     }
 
     // ---------------------------------------------------------------------
-    // fallback_level 必须在 levels 配置中
+    // 未命中层级：strict_mode=false 归入 unassigned（resolve 返回 null）
+    // （fallback_level 配置已移除，unassigned 是唯一的兜底机制）
     // ---------------------------------------------------------------------
 
-    public function test_fallback_level_not_in_levels_throws_exception(): void
+    public function test_unmatched_route_returns_null_when_not_strict(): void
     {
-        $levels = ['admin' => ['match' => []]];
+        $levels   = ['admin' => ['match' => []]];
+        $resolver = new TierResolver($levels);
 
-        $this->expectException(UnknownLevelException::class);
-        new TierResolver($levels, fallbackLevel: 'nonexistent');
-    }
-
-    public function test_fallback_level_in_levels_works(): void
-    {
-        $levels = ['admin' => ['match' => []]];
-
-        // 不应抛异常
-        $resolver = new TierResolver($levels, fallbackLevel: 'admin');
-
-        // 未命中任何规则时应兜底到 fallback_level
+        // 非严格模式：未命中任何规则 → null（即 unassigned 特殊层级）
         $route = $this->makeRoute('/test', [], []);
-        $this->assertSame('admin', $resolver->resolve($route));
-    }
-
-    public function test_fallback_level_null_is_valid(): void
-    {
-        $levels = ['admin' => ['match' => []]];
-
-        // fallbackLevel=null 是默认值，不应抛异常
-        $resolver = new TierResolver($levels, fallbackLevel: null);
-        $this->assertNull($resolver->resolve($this->makeRoute('/test', [], [])));
+        $this->assertNull($resolver->resolve($route));
     }
 }

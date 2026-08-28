@@ -13,7 +13,8 @@ use Symfony\Component\Console\Output\BufferedOutput;
 /**
  * route:forge:list 命令测试（对应 .docs/SPEC.md §3.2）。
  *
- * 默认配置：fallback_level=null、strict_mode=false、levels=[public, client, manage, admin]。
+ * 默认配置：strict_mode=false、levels=[public, client, manage, admin]，
+ * 未命中层级的路由归入 unassigned 特殊层级（fallback_level 已移除）。
  * ForgeServiceProvider::boot() 会注册 forge.routes.{index,show} 元信息端点，
  * 命令内部按 str_starts_with('forge.routes.') 跳过它们，故不会污染输出。
  *
@@ -41,7 +42,7 @@ class ListCommandTest extends TestCase
             ->name('client.dashboard')
             ->tier('client');
 
-        // orphan：未声明 tier、不匹配任何 prefix/middleware；fallback=null 时未分配
+        // orphan：未声明 tier、不匹配任何 prefix/middleware → unassigned
         RouteFacade::get('/orphan', static function () {})
             ->name('orphan');
     }
@@ -110,7 +111,7 @@ class ListCommandTest extends TestCase
         $this->assertNull($decoded['filter'], '无过滤条件时 filter 为 null');
         $this->assertSame(3, $decoded['count']);
 
-        // levels 应包含已定义层级 + unassigned 特殊层级（fallback=null）
+        // levels 应包含已定义层级 + unassigned 特殊层级
         $this->assertContains('admin', $decoded['levels']);
         $this->assertContains('unassigned', $decoded['levels']);
 
@@ -133,10 +134,21 @@ class ListCommandTest extends TestCase
         $this->assertSame('unassigned', $routes[$orphanKey]['level']);
     }
 
-    public function test_unassigned_filter_when_fallback_null(): void
+    public function test_unassigned_filter_lists_only_unassigned(): void
     {
-        // 默认 fallback_level=null：未命中层级的命名路由归入 unassigned
+        // 未命中层级的命名路由归入 unassigned（唯一的兜底机制）
         [$exit, $out] = $this->runList(['--unassigned' => true]);
+
+        $this->assertSame(0, $exit);
+        $this->assertStringContainsString('orphan', $out);
+        $this->assertStringNotContainsString('admin.users.index', $out);
+        $this->assertStringNotContainsString('client.dashboard', $out);
+    }
+
+    public function test_level_filter_accepts_unassigned_special_level(): void
+    {
+        // --level=unassigned 与 --unassigned 语义一致（特殊层级可作为过滤值）
+        [$exit, $out] = $this->runList(['--level' => 'unassigned']);
 
         $this->assertSame(0, $exit);
         $this->assertStringContainsString('orphan', $out);
