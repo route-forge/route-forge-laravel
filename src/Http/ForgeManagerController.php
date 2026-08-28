@@ -108,9 +108,13 @@ class ForgeManagerController extends Controller
             return new JsonResponse(['error' => 'Failed to write config file'], 500);
         }
 
-        // 清除配置缓存使变更立即生效
-        App::forgetInstance('config');
-        App::make('config');
+        // 若存在编译缓存的配置（php artisan config:cache），删除之，
+        // 使下一个请求的 LoadConfiguration 重新从 config/*.php 文件读取，
+        // 变更方能真正生效。开发环境（未缓存配置）下此文件不存在，属正常空操作。
+        $compiled = App::bootstrapPath('cache/config.php');
+        if (is_file($compiled)) {
+            @unlink($compiled);
+        }
 
         return new JsonResponse(['success' => true, 'message' => 'Config updated successfully']);
     }

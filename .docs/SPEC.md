@@ -652,7 +652,7 @@ PUT /_forge/manager/api/config   # 更新配置文件
 - **仅开发环境可用**：`APP_DEBUG=false` 时不注册任何管理器路由，零泄露风险。
 - 数据源与 Artisan 命令一致，直接从 Laravel 路由注册表读取，层级分配逻辑与运行时完全一致（遵循 §3.1.4
   五级优先级）。
-- 配置保存会重新生成 `config/forge.php` 文件，并自动清除配置缓存使变更立即生效。
+- 配置保存会重新生成 `config/forge.php` 文件；若存在编译缓存的配置（`php artisan config:cache`）则一并清除，使下一个请求重新读取配置文件生效。开发环境通常未缓存配置，下一个请求即时读取新文件。
 - 表格区域限高（`max-height: calc(100vh - 240px)`），路由多时表格内部滚动，表头 sticky 吸顶。
 - 前端零构建依赖：Blade 视图 + 原生 CSS + 原生 JavaScript，无需 Node.js 构建流程。
 

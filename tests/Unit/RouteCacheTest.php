@@ -20,8 +20,9 @@ use RouteForge\Laravel\Cache\RouteCache;
  * TTL 由构造函数统一传入，set() 不再从 payload 中读取 cache 字段。
  *
  * 驱动覆盖：ArrayStore（内存，默认）+ FileStore（文件，验证非内存驱动
- * 走同一套 keys-index 逻辑）。Redis 驱动因需外部服务，纳入需 redis-server
- * 的独立 CI job，不在本单测强制依赖。
+ * 走同一套 keys-index 逻辑）。RouteForge 缓存逻辑对具体 store 无感知（统一走
+ * Illuminate\Contracts\Cache\Repository 接口），redis 驱动复用同一代码路径，
+ * 无专属分支，故不单列测试（如需 redis-server 集成测试可另建带 service 的 CI job）。
  * 不走 Laravel 容器，直接扩展 PHPUnit\Framework\TestCase。
  */
 class RouteCacheTest extends TestCase

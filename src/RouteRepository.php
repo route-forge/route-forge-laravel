@@ -97,14 +97,6 @@ readonly class RouteRepository
     }
 
     /**
-     * 返回所有层级名（仅用于调试 / 健康检查）。
-     */
-    public function allLevels(): array
-    {
-        return array_keys($this->levelsConfig);
-    }
-
-    /**
      * 判断路由名是否为 Route Forge 自身端点（元信息端点 / 管理器页面）。
      *
      * forge.routes.* 与 forge.manager.* 是包内部路由，不应出现在

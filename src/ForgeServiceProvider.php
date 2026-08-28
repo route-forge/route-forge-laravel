@@ -163,9 +163,13 @@ class ForgeServiceProvider extends ServiceProvider
         $this->app->singleton(TierResolver::class, function ($app) {
             /** @var Container $app */
             $classifier = $app->make('config')->get('forge.classifier');
+            // classifier 契约类型是 callable|null（SPEC §5）：Closure、函数名字符串、
+            // [Class,'method'] 数组、可调用对象均合法。统一归一为 Closure 传入，
+            // 避免非 Closure callable 被静默丢弃（TierResolver 参数类型为 ?Closure）。
+            $classifier = is_callable($classifier) ? Closure::fromCallable($classifier) : null;
             return new TierResolver(
                 levelsConfig: $app->make('config')->get('forge.levels', []),
-                classifier: $classifier instanceof Closure ? $classifier : null,
+                classifier: $classifier,
                 strictMode: (bool) $app->make('config')->get('forge.strict_mode', false),
             );
         });
