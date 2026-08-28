@@ -27,7 +27,7 @@
 ### 3.1 核心能力
 
 Route Forge 提供三种互相兼容的路由层级分配方式，任选其一或组合使用。三层级名（如 `admin/manage/client`、`public/user/admin`
-）完全由项目自定义，包不预设固定层级（见 DESIGN.md §6.4）。
+）完全由项目自定义，包不预设固定层级（见 DESIGN.md §6.2）。
 
 #### 3.1.1 定义路由时显式标记（`->tier()` 宏）
 
@@ -382,7 +382,7 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
 + `schemeVersion`：摘要端点响应格式版本号，默认 `1`。后续迭代引入不兼容的格式变更时递增，前端应据此字段识别格式版本并做兼容处理。
 + `levels`：各层级摘要。`description` 层级描述、`load` 加载策略（eager/lazy）、`route_count` 该层级路由数量、`route` 该层级元信息端点的请求信息（`uri` + `methods`），前端可据此直接构造请求获取该层级的全量路由数据。
   - `unassigned`：特殊层级，与已定义层级结构完全一致，汇总所有未命中任何层级的命名路由。其路由明细不在摘要中内联返回，前端按 `route` 字段另行请求 `GET /{endpoint_prefix}/unassigned` 获取（见 §3.1.5）。
-+ `config`：后端全局配置摘要。前端初始化时读取此字段作为最高优先级配置源（见 §5.3 分级覆盖策略）。当前包含
++ `config`：后端全局配置摘要。前端初始化时读取此字段作为最高优先级配置源（后端为权威值，覆盖前端本地配置）。当前包含
   `strict_mode`、`endpoint_prefix`、`url_prefix` 和 `cache_ttl`，后续版本可扩展。
   - `url_prefix`：应用的路由前缀，支持两种格式——完整 URL（含协议和域名，如
     `https://api.example.com/v1`）或仅路径前缀（如 `/api/v1`）。未配置时为 `null`，前端视为无前缀。
