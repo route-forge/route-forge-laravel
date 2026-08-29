@@ -26,17 +26,23 @@ jobs:
           tools: composer:v2
 
       # orchestra/testbench 的大版本与 Laravel 大版本一一对应：
-      #   testbench ^9 → Laravel 11，^10 → Laravel 12。
-      # Laravel 13（testbench ^11）经 composer 约束声明支持，
-      # 待生态稳定后追加到矩阵。
+      #   testbench ^9 → Laravel 11，^10 → Laravel 12，^11 → Laravel 13。
       - name: Pin testbench to Laravel ${{ matrix.laravel }}
         run: |
           case "${{ matrix.laravel }}" in
             11.*) tb="^9.0" ;;
             12.*) tb="^10.0" ;;
+            13.*) tb="^11.0" ;;
             *)    tb="^10.0" ;;
           esac
           composer require --dev "orchestra/testbench:${tb}" --no-update --no-interaction
+
+      # Laravel 11 已过安全维护期，11.x 全系版本命中 Packagist 安全通告，
+      # composer 2.10 默认在解析阶段拦截（policy.advisories.block）导致无法安装。
+      # CI 仅验证兼容性、不部署生产，这里关闭拦截以继续测 Laravel 11。
+      - name: Allow EOL Laravel versions
+        if: matrix.laravel == '11.*'
+        run: composer config policy.advisories.block false
 
       - name: Install dependencies
         run: composer update --prefer-dist --no-interaction --no-progress --prefer-stable
