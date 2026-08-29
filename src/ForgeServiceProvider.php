@@ -16,6 +16,7 @@ use Illuminate\Routing\PendingSingletonResourceRegistration;
 use Illuminate\Routing\ResourceRegistrar;
 use Illuminate\Routing\Route;
 use Illuminate\Routing\Router as BaseRouter;
+use Illuminate\Support\Facades\Route as RouteFacade;
 use Illuminate\Support\ServiceProvider;
 use RouteForge\Laravel\Cache\RouteCache;
 use RouteForge\Laravel\Console\RouteForgeClearCommand;
@@ -127,6 +128,14 @@ class ForgeServiceProvider extends ServiceProvider
 
         // 同时绑定 Router 契约别名，避免某些包通过 alias 解析时绕过 ForgeRouter
         $this->app->alias('router', RouterContract::class);
+
+        // 清除 Route 门面缓存的 root 实例。Facade 不感知容器 rebind：
+        // 若 'router' 在重绑前已被门面解析过（如 Laravel 12 的
+        // FilesystemServiceProvider 在 booted 阶段经 Route::get 注册 storage 路由），
+        // 门面将一直持有旧 Router 实例，后续 Route:: 调用写入旧实例的集合，
+        // 造成「注册」与「分发」操作两张路由表。清除后下次门面调用会重新
+        // 解析容器，拿到 ForgeRouter。
+        RouteFacade::clearResolvedInstance('router');
 
         if ($previous instanceof BaseRouter && ! $previous instanceof ForgeRouter) {
             // Kernel（或其他早于本 provider 的代码）已持有原生 Router 引用：

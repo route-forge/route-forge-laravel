@@ -110,6 +110,30 @@ readonly class RouteRepository
     }
 
     /**
+     * 判断路由名是否为框架内部路由（非用户业务路由）。
+     *
+     * Laravel 12+ 的 FilesystemServiceProvider 会为 filesystems.disks 中
+     * 启用 serve 的磁盘注册 storage.{disk} 与 storage.{disk}.upload 命名路由
+     * （默认 local 磁盘即包含），它们与用户路由混在同一张路由表中。
+     * 这类框架内部路由不应出现在 route:forge:list / route:forge:types、
+     * 管理器数据与 unassigned 元信息端点中。
+     */
+    public static function isFrameworkRouteName(string $name): bool
+    {
+        return str_starts_with($name, 'storage.');
+    }
+
+    /**
+     * 判断路由是否应从 forge 的所有用户可见输出中排除
+     * （forge 自身端点 + 框架内部路由）。
+     */
+    public static function isExcludedRouteName(string $name): bool
+    {
+        return self::isForgeRouteName($name)
+            || self::isFrameworkRouteName($name);
+    }
+
+    /**
      * 摘要端点响应（SPEC §3.1.6）：返回格式版本（schemeVersion）、
      * 所有层级概览（含 unassigned 特殊层级）与全局配置。
      *
@@ -197,6 +221,10 @@ readonly class RouteRepository
             if ($name === null) {
                 continue;
             }
+            // 框架内部路由（如 storage.*）不计入任何层级统计
+            if (self::isFrameworkRouteName($name)) {
+                continue;
+            }
             $resolved = $this->tierResolver->resolve($route);
             if ($resolved !== null) {
                 $counts[$resolved] = ($counts[$resolved] ?? 0) + 1;
@@ -227,8 +255,8 @@ readonly class RouteRepository
             if ($name === null || $name === '') {
                 continue;
             }
-            // 跳过 forge 自身端点路由
-            if (self::isForgeRouteName($name)) {
+            // 跳过 forge 自身端点路由与框架内部路由
+            if (self::isExcludedRouteName($name)) {
                 continue;
             }
 
@@ -267,6 +295,10 @@ readonly class RouteRepository
         foreach ($this->router->getRoutes() as $route) {
             $name = $route->getName();
             if ($name === null) {
+                continue;
+            }
+            // 框架内部路由（如 storage.*）不属于用户业务路由，不进入 unassigned 元信息
+            if (self::isFrameworkRouteName($name)) {
                 continue;
             }
             if ($this->tierResolver->resolve($route) === null) {

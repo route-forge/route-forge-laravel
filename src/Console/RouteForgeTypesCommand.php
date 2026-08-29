@@ -47,7 +47,7 @@ class RouteForgeTypesCommand extends Command
             if ($name === null || $name === '') {
                 continue;
             }
-            if (RouteRepository::isForgeRouteName($name)) {
+            if (RouteRepository::isExcludedRouteName($name)) {
                 continue;
             }
 

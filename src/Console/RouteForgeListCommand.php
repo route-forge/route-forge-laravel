@@ -44,8 +44,8 @@ class RouteForgeListCommand extends Command
             if ($name === null || $name === '') {
                 continue;
             }
-            // 跳过 forge 自身端点路由（元信息端点 / 管理器页面）
-            if (RouteRepository::isForgeRouteName($name)) {
+            // 跳过 forge 自身端点路由与框架内部路由（如 Laravel 12+ 的 storage.*）
+            if (RouteRepository::isExcludedRouteName($name)) {
                 continue;
             }
 
