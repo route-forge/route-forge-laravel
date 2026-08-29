@@ -106,18 +106,18 @@ class ForgeRouter extends BaseRouter
         }
 
         if ($method === 'middleware') {
-            return new ForgeRouteRegistrar($this)->attribute($method, is_array($parameters[0]) ? $parameters[0] : $parameters);
+            return (new ForgeRouteRegistrar($this))->attribute($method, is_array($parameters[0]) ? $parameters[0] : $parameters);
         }
 
         if ($method === 'can') {
-            return new ForgeRouteRegistrar($this)->attribute($method, [$parameters]);
+            return (new ForgeRouteRegistrar($this))->attribute($method, [$parameters]);
         }
 
         if ($method !== 'where' && Str::startsWith($method, 'where')) {
-            return new ForgeRouteRegistrar($this)->{$method}(...$parameters);
+            return (new ForgeRouteRegistrar($this))->{$method}(...$parameters);
         }
 
-        return new ForgeRouteRegistrar($this)->attribute($method, array_key_exists(0, $parameters) ? $parameters[0] : true);
+        return (new ForgeRouteRegistrar($this))->attribute($method, array_key_exists(0, $parameters) ? $parameters[0] : true);
     }
 
     /**
