@@ -14,6 +14,10 @@ jobs:
       matrix:
         php: ['8.2', '8.3', '8.4', '8.5']
         laravel: ['11.*', '12.*', '13.*']
+        exclude:
+          # Laravel 13（testbench ^11）要求 PHP >= 8.3
+          - php: '8.2'
+            laravel: '13.*'
     name: PHP ${{ matrix.php }} · Laravel ${{ matrix.laravel }}
     steps:
       - uses: actions/checkout@v4
