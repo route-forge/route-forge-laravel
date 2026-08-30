@@ -242,6 +242,10 @@ GET /_forge/routes/{level}   # 返回该层级下所有命名路由的元信息
 
 `{level}` 支持特殊值 `unassigned`：返回所有未命中任何层级的命名路由，响应结构与已定义层级完全一致。
 
+**内部路由排除规则**：包自身端点路由（`forge.routes.*` / `forge.manager.*`）与框架内部路由（如 Laravel 12+ 的 `storage.*`）不属于用户业务路由，在所有元信息端点扫描中一律排除——不出现在任何层级端点、`unassigned` 明细、摘要 `route_count` 统计中，与 `route:forge:list` / `route:forge:types` / 管理器页面的过滤口径一致。这一规则同时保证 `strict_mode=true` 时包自身路由（永远不带 tier）不会触发 `RF_BE_001`，严格模式仅校验用户业务路由。
+
+另：`routes` 字段为按路由名索引的对象；层级下无路由时序列化为 `{}`（而非 `[]`）。
+
 返回示例：
 
 ```json
@@ -702,9 +706,9 @@ PUT /_forge/manager/api/config   # 更新配置文件
 | Artisan 命令 | `route:forge:types` 生成 d.ts 二级结构（层级 → 路由名）、`--level` 过滤、`--json` 二级 JSON 输出、`--out` 写文件                       |
 | Artisan 命令 | `route:forge:clear` 全量清除缓存、按层级清除、无效层级名报错                                                                           |
 | 中间件匹配   | `middleware_match` 简单模式（any/all）、高级模式（DNF 数组）、边界情况（空数组、单元素、**越界索引、空子句跳过、未知模式降级为 any**）；prefix **按段匹配**（`admin` 不命中 `administrator`） |
-| 端点响应     | `/_forge/routes/{level}` 返回结构、`/_forge/routes` 摘要端点返回结构、层级+摘要**缓存命中**、未声明层级 404、层级端点中间件保护、摘要端点中间件保护、**自定义 `endpoint_prefix` 注册与规范化**、`parameter_defaults` 空值序列化为 `{}` |
-| 严格模式     | `strict_mode=true` 未命中抛异常、`false` 未命中归入 unassigned 特殊层级                                                              |
-| Laravel 兼容 | CI（GitHub Actions）跑 PHP 8.2–8.4 × Laravel 11/12 矩阵；Laravel 13 经 composer 约束支持；资源路由、嵌套 group、链式语法、Router 重绑共享 RouteCollection |
+| 端点响应     | `/_forge/routes/{level}` 返回结构、`/_forge/routes` 摘要端点返回结构、层级+摘要**缓存命中**、未声明层级 404、层级端点中间件保护、摘要端点中间件保护、**自定义 `endpoint_prefix` 注册与规范化**、`parameter_defaults` 空值序列化为 `{}`、**空层级 `routes` 序列化为 `{}`** |
+| 严格模式     | `strict_mode=true` 未命中抛异常、`false` 未命中归入 unassigned 特殊层级、**包自身路由豁免严格校验（全部用户路由已分配时端点 200）** |
+| Laravel 兼容 | CI（GitHub Actions）跑 PHP 8.2–8.5 × Laravel 11/12/13 矩阵（排除 PHP 8.2 × Laravel 13 组合）；资源路由、嵌套 group、链式语法、Router 重绑共享 RouteCollection |
 | 缓存         | `array`/`file` 驱动（store 无关，`redis` 复用同一 `Repository` 接口，无专属逻辑）、TTL 正数过期、手动失效、`0` 永久缓存、`cache_ttl=null` 不缓存、keys 索引清理、debug 模式跳过读写 |
 | 管理器页面   | `GET /_forge/manager` 页面渲染、`/api/routes`（含 forge 自身路由过滤与 unassigned 归属）、`/api/config` 读取、配置生成器层级名转义（`php -l` 实测防注入）；仅 `APP_DEBUG=true` 注册 |
 

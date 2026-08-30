@@ -40,6 +40,17 @@ class ForgeManagerControllerTest extends TestCase
             ->name('loose.route');
     }
 
+    protected function tearDown(): void
+    {
+        // 清理 updateConfig 用例写入 testbench 骨架的配置文件，避免污染后续测试
+        $written = $this->app->configPath('forge.php');
+        if (is_file($written)) {
+            @unlink($written);
+        }
+
+        parent::tearDown();
+    }
+
     public function test_manager_page_renders_in_debug_mode(): void
     {
         $this->get('/_forge/manager')
@@ -76,6 +87,42 @@ class ForgeManagerControllerTest extends TestCase
         $this->assertArrayHasKey('admin', $payload['levels']);
         // global 不再包含已移除的 fallback_level
         $this->assertArrayNotHasKey('fallback_level', $payload['global']);
+    }
+
+    public function test_update_config_preserves_endpoint_middleware(): void
+    {
+        // 修复前：生成器硬编码 'endpoint_middleware' => []，保存即静默丢失现有配置
+        config()->set('forge.endpoint_middleware', ['auth', 'throttle']);
+
+        $response = $this->putJson('/_forge/manager/api/config', [
+            'levels' => config('forge.levels'),
+            'global' => [
+                'endpoint_prefix' => '/_forge/routes',
+                'cache_ttl'       => 60,
+                'strict_mode'     => false,
+            ],
+        ]);
+
+        $response->assertStatus(200);
+
+        $written = (string) file_get_contents($this->app->configPath('forge.php'));
+        $this->assertStringContainsString("'endpoint_middleware' => ['auth', 'throttle']", $written);
+    }
+
+    public function test_update_config_refuses_when_classifier_configured(): void
+    {
+        // classifier 是闭包，无法序列化回 PHP 配置文件；
+        // 修复前保存会静默抹掉该回调，现改为拒绝保存并明确提示
+        config()->set('forge.classifier', static fn ($route) => null);
+
+        $response = $this->putJson('/_forge/manager/api/config', [
+            'levels' => config('forge.levels'),
+            'global' => ['cache_ttl' => 60],
+        ]);
+
+        $response->assertStatus(422);
+        $this->assertStringContainsString('classifier', (string) $response->json('error'));
+        $this->assertFileDoesNotExist($this->app->configPath('forge.php'));
     }
 
     public function test_generated_config_is_valid_php_and_escapes_level_names(): void

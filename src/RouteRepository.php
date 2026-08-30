@@ -46,9 +46,12 @@ readonly class RouteRepository
      * level 支持特殊值 unassigned：返回所有未命中层级的命名路由，
      * 响应结构与已定义层级完全一致。
      *
+     * 包自身端点路由（forge.*）与框架内部路由（如 storage.*）在所有扫描中排除；
+     * routes 字段为 stdClass，空层级序列化为 {}（按路由名索引的对象契约）。
+     *
      * @return array{
      *   level:string,
-     *   routes:array<string,array{uri:string,methods:string[],parameters:string[],parameter_defaults:array<string,mixed>}>
+     *   routes:\stdClass<string,array{uri:string,methods:string[],parameters:string[],parameter_defaults:\stdClass}>
      * }
      */
     public function getRoutesByLevel(string $level): array
@@ -74,6 +77,10 @@ readonly class RouteRepository
                 if ($name === null) {
                     continue; // 未命名路由不出现在元信息里
                 }
+                // 包自身端点（forge.*）与框架内部路由（如 storage.*）不属于用户业务路由
+                if (self::isExcludedRouteName($name)) {
+                    continue;
+                }
                 $resolved = $this->tierResolver->resolve($route);
                 if ($resolved !== $level) {
                     continue;
@@ -89,7 +96,8 @@ readonly class RouteRepository
 
         $payload = [
             'level'  => $level,
-            'routes' => $routes,
+            // (object) 强转：空层级序列化为 {} 而非 []，保持「按路由名索引的对象」契约
+            'routes' => (object)$routes,
         ];
 
         $this->cache->set($level, $payload);
@@ -99,9 +107,14 @@ readonly class RouteRepository
     /**
      * 判断路由名是否为 Route Forge 自身端点（元信息端点 / 管理器页面）。
      *
-     * forge.routes.* 与 forge.manager.* 是包内部路由，不应出现在
-     * route:forge:list、route:forge:types 与管理器路由数据中。
-     * Artisan 命令与 RouteRepository 统一使用本方法过滤。
+     * forge.routes.* 与 forge.manager.* 是包内部路由，不应出现在任何用户可见输出中：
+     * route:forge:list、route:forge:types、管理器路由数据，以及元信息端点
+     * （层级端点、摘要统计、unassigned 特殊层级）。
+     *
+     * 关键原因：包自身路由永远不带 tier——若参与解析，
+     * strict_mode=true 时元信息端点会因它们必然抛 RF_BE_001，
+     * 导致严格模式完全不可用（DESIGN.md §7 推荐生产开启严格模式）。
+     * Artisan 命令与 RouteRepository 统一使用 isExcludedRouteName 过滤。
      */
     public static function isForgeRouteName(string $name): bool
     {
@@ -221,8 +234,8 @@ readonly class RouteRepository
             if ($name === null) {
                 continue;
             }
-            // 框架内部路由（如 storage.*）不计入任何层级统计
-            if (self::isFrameworkRouteName($name)) {
+            // 包自身端点（forge.*）与框架内部路由（如 storage.*）不计入任何层级统计
+            if (self::isExcludedRouteName($name)) {
                 continue;
             }
             $resolved = $this->tierResolver->resolve($route);
@@ -297,8 +310,9 @@ readonly class RouteRepository
             if ($name === null) {
                 continue;
             }
-            // 框架内部路由（如 storage.*）不属于用户业务路由，不进入 unassigned 元信息
-            if (self::isFrameworkRouteName($name)) {
+            // 包自身端点（forge.*）与框架内部路由（如 storage.*）不属于用户业务路由，
+            // 不进入 unassigned 元信息（否则前端会把包内部路由当作用户路由消费）
+            if (self::isExcludedRouteName($name)) {
                 continue;
             }
             if ($this->tierResolver->resolve($route) === null) {

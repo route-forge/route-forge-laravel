@@ -123,11 +123,32 @@ class EndpointTest extends TestCase
             ->name('orphan');
 
         // strict_mode=true 时，扫描任一层级都会遍历所有命名路由，
-        // 命中 orphan（及元信息端点自身 forge.routes.show）时 TierResolver 抛 RF_BE_001
+        // 命中未分配层级的用户路由（orphan）时 TierResolver 抛 RF_BE_001。
+        // 包自身端点路由（forge.routes.*）已在扫描中排除，不参与解析。
         $response = $this->get($this->endpoint('admin'));
 
         $response->assertStatus(500);
         $this->assertSame('RF_BE_001', $response->json('error.code'));
+    }
+
+    public function test_strict_mode_all_routes_assigned_returns_200(): void
+    {
+        // 回归：strict_mode=true 且所有用户路由均已分配层级时，端点必须正常工作。
+        // 修复前包自身路由（forge.routes.*）参与解析，导致必然抛 RF_BE_001、
+        // 严格模式完全不可用（与 DESIGN.md §7「生产建议开启严格模式」矛盾）。
+        config()->set('forge.strict_mode', true);
+
+        RouteFacade::get('/admin/users', static function () {})
+            ->name('admin.users.index')
+            ->tier('admin');
+
+        $summary = $this->get($this->summaryEndpoint());
+        $summary->assertStatus(200);
+        $this->assertSame(1, $summary->json('levels.admin.route_count'));
+
+        $level = $this->get($this->endpoint('admin'));
+        $level->assertStatus(200);
+        $this->assertArrayHasKey('admin.users.index', $level->json('routes'));
     }
 
     public function test_cache_hit_avoids_rescan(): void
@@ -232,10 +253,11 @@ class EndpointTest extends TestCase
         // admin 层级 route_count 应为 1（仅 admin.users.index）
         $this->assertSame(1, $payload['levels']['admin']['route_count']);
 
-        // unassigned 特殊层级摘要：结构与已定义层级一致，route_count 含 orphan（及 forge 自身端点路由）
+        // unassigned 特殊层级摘要：结构与已定义层级一致；
+        // 包自身路由已排除，route_count 精确等于 orphan 数量
         $unassigned = $payload['levels']['unassigned'];
         $this->assertSame('lazy', $unassigned['load']);
-        $this->assertGreaterThanOrEqual(1, $unassigned['route_count']);
+        $this->assertSame(1, $unassigned['route_count']);
 
         // config 摘要
         $this->assertFalse($payload['config']['strict_mode']);
@@ -271,6 +293,10 @@ class EndpointTest extends TestCase
         $this->assertArrayHasKey('orphan', $payload['routes']);
         $this->assertArrayNotHasKey('admin.users.index', $payload['routes']);
 
+        // 包自身端点路由（修复前会泄露进 unassigned，被前端当作用户路由消费）
+        $this->assertArrayNotHasKey('forge.routes.index', $payload['routes']);
+        $this->assertArrayNotHasKey('forge.routes.show', $payload['routes']);
+
         // 条目结构与已定义层级端点一致（按路由名索引，无冗余 name 字段）
         $route = $payload['routes']['orphan'];
         $this->assertSame('orphan', $route['uri']);
@@ -289,8 +315,8 @@ class EndpointTest extends TestCase
             ->name('orphan.b');
 
         $summary = $this->get($this->summaryEndpoint())->json();
-        // ≥2：orphan-a/orphan-b（另含 forge 自身端点路由，不精确断言总数）
-        $this->assertGreaterThanOrEqual(2, $summary['levels']['unassigned']['route_count']);
+        // 包自身路由已排除，精确等于两条 orphan 路由
+        $this->assertSame(2, $summary['levels']['unassigned']['route_count']);
 
         $routes = $this->get($this->endpoint('unassigned'))->json('routes');
         $this->assertArrayHasKey('orphan.a', $routes);
@@ -379,5 +405,16 @@ class EndpointTest extends TestCase
         $this->assertArrayHasKey('items.index', $routes);
         $this->assertArrayHasKey('parameter_defaults', $routes['items.index']);
         $this->assertSame(['page' => '1'], $routes['items.index']['parameter_defaults']);
+    }
+
+    public function test_empty_level_serializes_routes_as_object(): void
+    {
+        // admin 层级下无任何路由时，routes 必须序列化为对象 {} 而非数组 []，
+        // 保持「按路由名索引的对象」契约（修复前空层级返回 []，
+        // 与 parameter_defaults 空值序列化为 {} 的既有约定不一致）。
+        $content = (string) $this->get($this->endpoint('admin'))->getContent();
+
+        $this->assertStringContainsString('"routes":{}', $content);
+        $this->assertStringNotContainsString('"routes":[]', $content);
     }
 }

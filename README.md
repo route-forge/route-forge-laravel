@@ -189,7 +189,7 @@ composer test            # 运行 PHPUnit 测试套件
 composer test:coverage   # 文本覆盖率报告
 ```
 
-测试基于 [orchestra/testbench](https://github.com/orchestral/testbench)，覆盖层级分配优先级（含资源路由）、中间件匹配（any/all/DNF）、端点响应、缓存、严格模式与三个 Artisan 命令。CI 通过 GitHub Actions 跑 PHP 8.2–8.4 × Laravel 11/12 版本矩阵（见 `.github/workflows/tests.yml`）。
+测试基于 [orchestra/testbench](https://github.com/orchestral/testbench)，覆盖层级分配优先级（含资源路由）、中间件匹配（any/all/DNF）、端点响应、缓存、严格模式与三个 Artisan 命令。CI 通过 GitHub Actions 跑 PHP 8.2–8.5 × Laravel 11/12/13 版本矩阵（排除 PHP 8.2 × Laravel 13 组合，见 `.github/workflows/tests.yml`）。
 
 ## License
 

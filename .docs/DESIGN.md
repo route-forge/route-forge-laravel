@@ -140,7 +140,7 @@ Laravel 路由定义里天然包含 HTTP 方法（GET/POST/PUT/DELETE），没�
 
 | 风险                                 | 缓解策略                                                   |
 |--------------------------------------|------------------------------------------------------------|
-| Laravel 大版本升级导致 API 变动      | 覆盖 Router/Registrar 扩展点做适配；CI 跑 PHP 8.2–8.4 × Laravel 11/12 矩阵 |
+| Laravel 大版本升级导致 API 变动      | 覆盖 Router/Registrar 扩展点做适配；CI 跑 PHP 8.2–8.5 × Laravel 11/12/13 矩阵 |
 | 开源项目维护疲劳                     | 设定清晰的 Roadmap；拒绝超出定位的 feature request         |
 | TS 类型推导在某些边界情况下失败      | 提供 escape hatch（`api<any>(...)`），但不鼓励             |
 | unassigned 兜底暴露未标记路由       | 文档建议生产环境开启 `strict_mode=true` 或显式标记所有路由 |

@@ -101,6 +101,16 @@ class ForgeManagerController extends Controller
             return new JsonResponse(['error' => 'Invalid global config'], 422);
         }
 
+        // classifier 是闭包等运行时 callable，无法序列化回 PHP 配置文件。
+        // 若已配置则拒绝保存（fail-fast），避免重新生成文件时静默抹掉分类回调。
+        if (config('forge.classifier') !== null) {
+            return new JsonResponse([
+                'error' => 'A classifier callback is configured in config/forge.php. '
+                    . 'The manager cannot serialize closures into the config file; '
+                    . 'please edit config/forge.php manually.',
+            ], 422);
+        }
+
         $configPath = App::configPath('forge.php');
         $content    = $this->generateConfigContent($levels, $global);
 
@@ -134,6 +144,10 @@ class ForgeManagerController extends Controller
         $cacheDriver    = $this->exportScalar($global['cache_driver'] ?? null);
         $strictMode     = ($global['strict_mode'] ?? false) ? 'true' : 'false';
         $schemeVersion  = (int)($global['scheme_version'] ?? 1);
+        // 摘要端点中间件不在管理器表单中编辑，保留现有配置值避免保存时丢失
+        $endpointMiddleware = $this->exportInlineArray(
+            array_values((array) config('forge.endpoint_middleware', []))
+        );
 
         return <<<PHP
 <?php
@@ -173,7 +187,7 @@ return [
     | 摘要端点中间件
     |--------------------------------------------------------------------------
     */
-    'endpoint_middleware' => [],
+    'endpoint_middleware' => {$endpointMiddleware},
 
     /*
     |--------------------------------------------------------------------------
