@@ -89,10 +89,12 @@ class ForgeManagerControllerTest extends TestCase
         $this->assertArrayNotHasKey('fallback_level', $payload['global']);
     }
 
-    public function test_update_config_preserves_endpoint_middleware(): void
+    public function test_update_config_preserves_uneditable_settings(): void
     {
-        // 修复前：生成器硬编码 'endpoint_middleware' => []，保存即静默丢失现有配置
+        // 修复前：生成器硬编码 'endpoint_middleware' => []，保存即静默丢失现有配置。
+        // manager_allowed_ips 同理：不在管理器表单中编辑，保存时必须原样透传。
         config()->set('forge.endpoint_middleware', ['auth', 'throttle']);
+        config()->set('forge.manager_allowed_ips', ['127.0.0.1', '::1', '192.168.1.10']);
 
         $response = $this->putJson('/_forge/manager/api/config', [
             'levels' => config('forge.levels'),
@@ -107,6 +109,10 @@ class ForgeManagerControllerTest extends TestCase
 
         $written = (string) file_get_contents($this->app->configPath('forge.php'));
         $this->assertStringContainsString("'endpoint_middleware' => ['auth', 'throttle']", $written);
+        $this->assertStringContainsString(
+            "'manager_allowed_ips' => ['127.0.0.1', '::1', '192.168.1.10']",
+            $written,
+        );
     }
 
     public function test_update_config_refuses_when_classifier_configured(): void

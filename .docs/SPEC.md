@@ -654,9 +654,16 @@ PUT /_forge/manager/api/config   # 更新配置文件
 行为说明：
 
 - **仅开发环境可用**：`APP_DEBUG=false` 时不注册任何管理器路由，零泄露风险。
+- **IP 白名单**：开发环境内管理器路由统一经 `ManagerAllowedIps` 中间件，按
+  `manager_allowed_ips` 配置限制来源 IP——默认 `['127.0.0.1', '::1']` 仅本机可访问
+  （浏览器访问 localhost 可能解析为 IPv6 的 `::1`，故一并放行）；列表元素 `'*'`
+  放行任意来源；`null` / 空数组表示显式不做 IP 限制。局域网调试时把开发机局域网 IP
+  追加进列表即可。线上 `APP_DEBUG=false` 根本不注册管理器路由，本配置天然不生效、可无视。
 - 数据源与 Artisan 命令一致，直接从 Laravel 路由注册表读取，层级分配逻辑与运行时完全一致（遵循 §3.1.4
   五级优先级）。
 - 配置保存会重新生成 `config/forge.php` 文件；若存在编译缓存的配置（`php artisan config:cache`）则一并清除，使下一个请求重新读取配置文件生效。开发环境通常未缓存配置，下一个请求即时读取新文件。
+  - 已配置 `classifier` 回调时拒绝保存并返回 422（闭包无法序列化回配置文件，避免静默抹掉回调）；
+  - 不在表单中编辑的配置项（`endpoint_middleware`、`manager_allowed_ips`）保存时原样透传，不会丢失。
 - 表格区域限高（`max-height: calc(100vh - 240px)`），路由多时表格内部滚动，表头 sticky 吸顶。
 - 前端零构建依赖：Blade 视图 + 原生 CSS + 原生 JavaScript，无需 Node.js 构建流程。
 
@@ -682,6 +689,7 @@ PUT /_forge/manager/api/config   # 更新配置文件
 | `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 `unassigned` 特殊层级（false）                                                                                                                         |
 | `scheme_version`                       | `int`                        | `1`                | 摘要端点返回的响应格式版本号（`schemeVersion` 字段）；后续迭代引入不兼容的格式变更时递增，前端据此做版本兼容                                                                                      |
 | `classifier`                           | `callable\|null`             | `null`             | 自定义分类回调，签名 `fn(Route $r): ?string`，返回层级名或 null。返回的层级名必须在 `levels` 配置中存在，否则抛 `UnknownClassifierTierException`                                                  |
+| `manager_allowed_ips`                  | `string[]\|null`             | `['127.0.0.1', '::1']` | 管理器页面 IP 白名单（仅 `APP_DEBUG=true` 有意义，线上不注册管理器路由可无视）：精确匹配来源 IP，`'*'` 放行任意来源，`null`/空数组不做限制                                                          |
 
 ## 6. 错误码
 
@@ -710,7 +718,7 @@ PUT /_forge/manager/api/config   # 更新配置文件
 | 严格模式     | `strict_mode=true` 未命中抛异常、`false` 未命中归入 unassigned 特殊层级、**包自身路由豁免严格校验（全部用户路由已分配时端点 200）** |
 | Laravel 兼容 | CI（GitHub Actions）跑 PHP 8.2–8.5 × Laravel 11/12/13 矩阵（排除 PHP 8.2 × Laravel 13 组合）；资源路由、嵌套 group、链式语法、Router 重绑共享 RouteCollection |
 | 缓存         | `array`/`file` 驱动（store 无关，`redis` 复用同一 `Repository` 接口，无专属逻辑）、TTL 正数过期、手动失效、`0` 永久缓存、`cache_ttl=null` 不缓存、keys 索引清理、debug 模式跳过读写 |
-| 管理器页面   | `GET /_forge/manager` 页面渲染、`/api/routes`（含 forge 自身路由过滤与 unassigned 归属）、`/api/config` 读取、配置生成器层级名转义（`php -l` 实测防注入）；仅 `APP_DEBUG=true` 注册 |
+| 管理器页面   | `GET /_forge/manager` 页面渲染、`/api/routes`（含 forge 自身路由过滤与 unassigned 归属）、`/api/config` 读取、配置生成器层级名转义（`php -l` 实测防注入）与**不可编辑项（`endpoint_middleware` / `manager_allowed_ips`）保存透传**、**IP 白名单（默认仅回环、局域网 IP 精确匹配、`*` 放行、空值不限制）**；仅 `APP_DEBUG=true` 注册 |
 
 ## 8. 版本与发布
 
@@ -729,7 +737,6 @@ PUT /_forge/manager/api/config   # 更新配置文件
 
 - ✅ v1.1：可视化路由管理面板（Blade + 原生 JS，开发环境专属）
 - v1.2：OpenAPI 桥接（从 OpenAPI spec 生成 Route Forge 类型）
-- v1.3：Vite 插件（dev 时自动 codegen，HMR 同步路由变更）
 
 ### 8.3 兼容性承诺
 

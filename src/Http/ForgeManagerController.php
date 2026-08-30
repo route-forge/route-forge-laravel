@@ -48,6 +48,7 @@ class ForgeManagerController extends Controller
                 'cache_driver'    => config('forge.cache_driver'),
                 'strict_mode'     => (bool)config('forge.strict_mode', false),
                 'scheme_version'  => (int)config('forge.scheme_version', 1),
+                'manager_allowed_ips' => (array)config('forge.manager_allowed_ips', ['127.0.0.1', '::1']),
             ],
         ]);
     }
@@ -79,6 +80,7 @@ class ForgeManagerController extends Controller
                 'cache_driver'    => config('forge.cache_driver'),
                 'strict_mode'     => (bool)config('forge.strict_mode', false),
                 'scheme_version'  => (int)config('forge.scheme_version', 1),
+                'manager_allowed_ips' => (array)config('forge.manager_allowed_ips', ['127.0.0.1', '::1']),
             ],
         ]);
     }
@@ -147,6 +149,10 @@ class ForgeManagerController extends Controller
         // 摘要端点中间件不在管理器表单中编辑，保留现有配置值避免保存时丢失
         $endpointMiddleware = $this->exportInlineArray(
             array_values((array) config('forge.endpoint_middleware', []))
+        );
+        // 管理器 IP 白名单同样不在表单中编辑，保留现有配置值
+        $managerAllowedIps = $this->exportInlineArray(
+            array_values(array_map('strval', (array) config('forge.manager_allowed_ips', ['127.0.0.1', '::1'])))
         );
 
         return <<<PHP
@@ -223,6 +229,13 @@ return [
     |--------------------------------------------------------------------------
     */
     'classifier'        => null,
+
+    /*
+    |--------------------------------------------------------------------------
+    | 管理器页面允许访问的 IP 列表
+    |--------------------------------------------------------------------------
+    */
+    'manager_allowed_ips' => {$managerAllowedIps},
 ];
 
 PHP;

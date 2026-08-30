@@ -15,7 +15,7 @@
 ## 📦 仓库来源
 
 本仓库自 **route-forge
-monorepo**（[github.com/xyj2156/route-forge](https://github.com/xyj2156/route-forge)）拆分而来，仅承载其中的
+monorepo**（[github.com/route-forge/route-forge](https://github.com/route-forge/route-forge)）拆分而来，仅承载其中的
 **`route-forge/laravel` composer 包**（后端实现）。
 
 - 前端包（`@route-forge/core`、`@route-forge/vue`）仍在原 monorepo 中维护；
@@ -180,6 +180,8 @@ php artisan route:forge:clear
 - **配置**：编辑全局设置与 levels 层级配置，保存后直接写入 `config/forge.php`
 
 > ⚠️ 仅 `APP_DEBUG=true` 时可用，生产环境不注册任何管理器路由。
+> 开发环境内还受 `manager_allowed_ips` IP 白名单保护（默认仅 `127.0.0.1` / `::1`
+> 本机可访问；局域网调试可追加开发机局域网 IP，详见 `config/forge.php`）。
 
 ## 开发
 

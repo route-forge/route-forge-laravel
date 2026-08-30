@@ -24,6 +24,7 @@ use RouteForge\Laravel\Console\RouteForgeListCommand;
 use RouteForge\Laravel\Console\RouteForgeTypesCommand;
 use RouteForge\Laravel\Exceptions\UnknownLevelException;
 use RouteForge\Laravel\Http\ForgeManagerController;
+use RouteForge\Laravel\Http\Middleware\ManagerAllowedIps;
 use RouteForge\Laravel\Http\RouteMetadataController;
 
 /**
@@ -311,7 +312,11 @@ class ForgeServiceProvider extends ServiceProvider
      *   - GET  /_forge/manager/api/config → 当前配置 JSON
      *   - PUT  /_forge/manager/api/config → 更新配置文件
      *
-     * 非开发环境不注册任何路由，确保零泄露风险。
+     * 访问控制两层：
+     *   1. 非开发环境（APP_DEBUG=false）不注册任何路由，确保零泄露风险；
+     *   2. 开发环境内再经 ManagerAllowedIps 中间件按
+     *      forge.manager_allowed_ips 配置做 IP 白名单限制
+     *      （默认仅本机回环地址可访问，见 config/forge.php）。
      */
     protected function registerManagerRoutes(): void
     {
@@ -322,14 +327,21 @@ class ForgeServiceProvider extends ServiceProvider
         $router = $this->app['router'];
         $prefix = '/_forge/manager';
 
-        $router->get($prefix, [ForgeManagerController::class, 'index'])
-               ->name('forge.manager.index');
-        $router->get("{$prefix}/api/routes", [ForgeManagerController::class, 'routes'])
-               ->name('forge.manager.api.routes');
-        $router->get("{$prefix}/api/config", [ForgeManagerController::class, 'config'])
-               ->name('forge.manager.api.config');
-        $router->put("{$prefix}/api/config", [ForgeManagerController::class, 'updateConfig'])
-               ->name('forge.manager.api.config.update');
+        $routes = [
+            $router->get($prefix, [ForgeManagerController::class, 'index'])
+                   ->name('forge.manager.index'),
+            $router->get("{$prefix}/api/routes", [ForgeManagerController::class, 'routes'])
+                   ->name('forge.manager.api.routes'),
+            $router->get("{$prefix}/api/config", [ForgeManagerController::class, 'config'])
+                   ->name('forge.manager.api.config'),
+            $router->put("{$prefix}/api/config", [ForgeManagerController::class, 'updateConfig'])
+                   ->name('forge.manager.api.config.update'),
+        ];
+
+        // IP 白名单守卫：来源不在允许列表内返回 403
+        foreach ($routes as $route) {
+            $route->middleware(ManagerAllowedIps::class);
+        }
     }
 
     /**
