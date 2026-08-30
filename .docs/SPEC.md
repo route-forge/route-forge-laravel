@@ -736,7 +736,17 @@ PUT /_forge/manager/api/config   # 更新配置文件
 ### 8.2 v1.x 路线图
 
 - ✅ v1.1：可视化路由管理面板（Blade + 原生 JS，开发环境专属）
-- v1.2：OpenAPI 桥接（从 OpenAPI spec 生成 Route Forge 类型）
+
+> 路线图已清空，包转入维护态（兼容矩阵跟进 Laravel 新版本、缺陷修复、issue 支持）。
+>
+> 已评估并放弃的方向：
+> - ~~OpenAPI 桥接（从 OpenAPI spec 生成 body/response 类型）~~：价值前提是项目已
+>   持有 OpenAPI 文档（如经 Scramble 自动生成），未持有则为每个接口手写 schema 的
+>   成本高于直接在前端手写 TS 类型，等于双重维护；且响应类型推断与包「路由元信息
+>   单一真相源」的核心定位正交（SPEC §3.2 设计上 body/response 即为 unknown，
+>   由业务侧自行补类型）。2026-08-30 评估后放弃。
+> - ~~Vite 插件（dev 时自动 codegen，HMR 同步路由变更）~~：属前端工具链，不在
+>   后端包范围。
 
 ### 8.3 兼容性承诺
 
