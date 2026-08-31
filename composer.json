@@ -1,9 +1,9 @@
 {
     "name": "route-forge/laravel",
-    "description": "Laravel 命名路由的分级懒加载后端：路由扫描、tier 分配（->tier() / Route::group / config match / classifier / unassigned）、元信息端点、缓存",
+    "description": "Laravel named routes for SPA frontends: per-tier lazy loading via an HTTP metadata endpoint, an auto-discovery summary, TypeScript type generation, and zero-annotation route export. Backend of the route-forge project.",
     "license": "MIT",
     "type": "library",
-    "homepage": "https://github.com/route-forge/route-forge",
+    "homepage": "https://github.com/route-forge/route-forge-laravel",
     "authors": [
         {
             "name": "阿杰很厉害",
@@ -12,16 +12,31 @@
         }
     ],
     "support": {
-        "issues": "https://github.com/route-forge/route-forge/issues",
-        "source": "https://github.com/route-forge/route-forge"
+        "issues": "https://github.com/route-forge/route-forge-laravel/issues",
+        "source": "https://github.com/route-forge/route-forge-laravel",
+        "docs": "https://github.com/route-forge/route-forge-laravel/tree/main/.docs"
     },
     "keywords": [
         "laravel",
         "route",
+        "routes",
+        "routing",
         "named-route",
         "spa",
         "tier",
-        "lazy-loading"
+        "tiered-routing",
+        "lazy-loading",
+        "on-demand",
+        "metadata",
+        "typescript",
+        "types",
+        "api",
+        "vue",
+        "react",
+        "inertia",
+        "frontend",
+        "single-source-of-truth",
+        "php"
     ],
     "require": {
         "php": "^8.2",

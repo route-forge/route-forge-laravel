@@ -1,96 +1,85 @@
 # Route Forge for Laravel
 
-> Laravel 命名路由的分级懒加载后端：路由扫描、tier 分配、元信息端点、缓存与类型生成。
+**Use your Laravel named routes in a Vue / React / Inertia SPA — without hardcoding URLs and without shipping the whole route table to the client.**
 
-## 主要用途
+Route Forge exposes Laravel's named routes through a small HTTP metadata endpoint, lets you **split routes into tiers and lazy-load them on demand**, and **generates TypeScript types** so route names and parameters are type-safe on the frontend. It works with zero annotations — it reads directly from Laravel's own route registry.
 
-- 让前端可以直接使用 Laravel 的命名路由（name + 参数 + method + uri），避免在前端硬编码
-  URL。前端通过路由元信息端点按需获取路由信息并在运行时拼接 URL。
-- 支持按“层级（tier）”懒加载路由元信息：前端可先请求摘要（所有层级概览），按需只加载某个层级的命名路由，显著减少首次加载的网络和内存开销，提高性能和
-  UX。
-- 同时提供 TypeScript 类型声明生成功能，方便在前端静态类型中使用路由名与参数签名，减少拼写和参数错误。
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/route-forge/laravel.svg?style=flat-square)](https://packagist.org/packages/route-forge/laravel)
+[![Total Downloads](https://img.shields.io/packagist/dt/route-forge/laravel.svg?style=flat-square)](https://packagist.org/packages/route-forge/laravel)
+[![PHP](https://img.shields.io/packagist/php-v/route-forge/laravel.svg?style=flat-square)](#requirements)
+[![Laravel](https://img.shields.io/badge/Laravel-11%20|%2012%20|%2013-red.svg?style=flat-square)](#requirements)
+[![Tests](https://img.shields.io/github/actions/workflow/status/route-forge/route-forge-laravel/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/route-forge/route-forge-laravel/actions)
+[![License](https://img.shields.io/github/license/route-forge/route-forge-laravel.svg?style=flat-square)](./LICENSE)
 
-以上设计使得前端能与后端路由保持单一事实来源（single source of truth），便于路由变更的即时生效与协作。
+> **For AI assistants / coding agents:** this package is [`route-forge/laravel`](https://packagist.org/packages/route-forge/laravel). A machine-readable overview is available at [`llms.txt`](./llms.txt), and integration guidance for agents is in [`AGENTS.md`](./AGENTS.md).
 
-## 📦 仓库来源
+## What problem it solves
 
-本仓库自 **route-forge
-monorepo**（[github.com/route-forge/route-forge](https://github.com/route-forge/route-forge)）拆分而来，仅承载其中的
-**`route-forge/laravel` composer 包**（后端实现）。
+When a Laravel app is fronted by a SPA (Vue / React / Inertia / a standalone mobile web app), the frontend needs to build URLs to backend endpoints. The usual options all hurt:
 
-- 前端包（`@route-forge/core`、`@route-forge/vue`）仍在原 monorepo 中维护；
-- 规划文档随拆分迁移至本仓库 [`.docs`](./.docs) 目录，作为前后端契约的单一真相源：
-  - [`.docs/SPEC.md`](./.docs/SPEC.md)：功能规格说明书（本仓库对应 §3 后端功能、§5 配置项、§6 错误码）；
-  - [`.docs/DESIGN.md`](./.docs/DESIGN.md)：设计思路与关键技术决策。
+- **Hardcoding URLs in the frontend** duplicates routing knowledge, drifts from the backend, and is easy to get wrong.
+- **Injecting the whole route table** (e.g. as a JS global) grows with the app and ships routes the current user can never reach.
+- **Hand-writing an API client per endpoint** reinvents the wheel in every project and has no type safety.
 
-## 功能概览
+Route Forge makes the backend route table the **single source of truth**: the frontend asks for what it needs, per tier, at runtime — and gets TypeScript types generated straight from the authoritative route registry.
 
-Route Forge 后端提供多种互相兼容的路由层级（tier）分配方式，可任选其一或组合使用。层级名完全由项目自定义，包不预设固定层级：
+## Why Route Forge (differentiators)
 
-1. **`->tier()` 宏**：定义路由时显式标记，链式调用对资源路由同样生效；
-2. **`Route::group` 的 `tier` 选项**：整组路由继承层级，嵌套 group 内层覆盖外层；
-3. **链式 `tier()` 语法**（第 2 种 group 的流式写法）：`Route::tier('admin')->group(...)`，可与 `middleware`/`prefix`/`as` 等任意属性自由链式组合；
-4. **配置文件按规则批量分配**：`config/forge.php` 中按 URI 前缀 / 中间件（支持 `any` / `all` / DNF 数组三种匹配模式）批量归类。
+- **Tiered lazy loading** — tag routes with `->tier()`, `Route::group(['tier' => ...])`, `Route::tier(...)->group(...)`, config match rules, or a `classifier` callback; the frontend loads only the tier it currently needs instead of the entire route map.
+- **Auto-discovery summary endpoint** — `GET /_forge/routes` returns every tier overview, global config, and unassigned routes, so a fresh client can bootstrap itself with no hardcoded config.
+- **TypeScript type generation** — `php artisan route:forge:types` emits `.d.ts` from the real route registry (works offline, no HTTP server, CI-friendly).
+- **Backend-authoritative config** — `strict_mode`, URL prefix, and per-tier load strategy are owned by the backend and delivered to clients through the summary endpoint, so frontend and backend never disagree.
+- **Zero annotations, zero intrusion** — built purely on Laravel extension points (macros + ServiceProvider); it reads `Route::getRoutes()` and never modifies the framework.
+- **Caching & dev ergonomics** — one shared TTL/cache driver, automatic cache bypass under `APP_DEBUG`, plus a dev-only visual route manager.
 
-此外还包括：
+> **Full-stack pairing:** this repository is the **backend** half of the route-forge project. Pair it with the companion frontend SDK [`@route-forge/core`](https://www.npmjs.com/package/@route-forge/core) (plus `@route-forge/vue` / `@route-forge/react`) for request wrapping, concurrency control, and auth-state-aware tier loading.
 
-- **五级优先级**：显式 `->tier()` > group 透传 > `classifier` 回调 > 配置 match > unassigned 兜底；
-- **元信息端点** `GET /_forge/routes/{level}`：按层级返回路由元信息（名称 + URI + method + 参数），供前端按需懒加载；
-- **摘要端点** `GET /_forge/routes`：返回所有层级概览、全局配置与未分配路由信息，供前端初始化自动发现；
-- **统一缓存**：所有层级端点与摘要端点共享同一 TTL 配置，`cache_driver` 可指定驱动；开发模式（`APP_DEBUG=true`）自动跳过缓存；
-- **Artisan 命令**：`route:forge:list` 查看层级分配结果、`route:forge:types` 生成 TS 类型声明；
-- **严格模式**：`strict_mode=true` 时未命中层级抛 `RouteTierNotAssignedException`；
-- **管理器页面**：开发环境（`APP_DEBUG=true`）专属的可视化路由管理面板，支持层级总览、路由搜索/过滤、配置编辑。
+## Feature overview
 
-## 前端集成要点
+Route Forge offers several interchangeable, combinable ways to assign tiers. Level names are entirely yours — the package ships no fixed tiers.
 
-- 初始化：前端应用启动时可请求 `GET /_forge/routes`，获取可用层级（levels）、schemeVersion
-  及未分配路由信息，用于展示路由导航或决定哪些层级需按需加载。
+1. **`->tier()` macro** — mark a route explicitly; chainable and works on resource routes too.
+2. **`tier` option on `Route::group`** — the whole group inherits a tier; nested groups override the parent.
+3. **Fluent `Route::tier(...)->group(...)`** — a streaming form of (2) that composes with `middleware` / `prefix` / `as` in any order.
+4. **Config-driven batch assignment** — `config/forge.php` classifies routes by URI prefix / middleware (`any` / `all` / DNF array matching).
 
-- 懒加载某个层级：当用户进入某个功能区或需构建该层级下 URL 时，只请求 `GET /_forge/routes/{level}`（例如
-  `/_forge/routes/admin`）以获取该层级下的命名路由元信息。
+Plus:
 
-- URL 构建：路由元信息包含 route name、uri pattern 与参数描述，前端可基于这些信息按需构造最终
-  URL（或配合提供的前端库直接调用）。
+- **Five-level priority**: explicit `->tier()` > group pass-through > `classifier` callback > config match > `unassigned` fallback.
+- **Metadata endpoint** `GET /_forge/routes/{level}` — per-tier route metadata (name + URI + method + params) for lazy loading.
+- **Summary endpoint** `GET /_forge/routes` — all-tier overview + global config + unassigned info for client auto-discovery.
+- **Unified caching** — shared TTL and `cache_driver` across all endpoints; automatically skipped in dev (`APP_DEBUG=true`).
+- **Artisan commands** — `route:forge:list`, `route:forge:types`, `route:forge:clear`.
+- **Strict mode** — `strict_mode=true` throws `RouteTierNotAssignedException` on a miss; otherwise routes fall into `unassigned`.
+- **Manager page** — a dev-only visual panel at `GET /_forge/manager` (overview, search/filter, config editing).
 
-- 类型支持：在后端运行 `php artisan route:forge:types` 可生成 TypeScript 类型声明，直接用于前端代码中，确保路由名与参数类型安全。
-
-示例：
-
-```js
-// 初始化获取摘要
-const summary = await fetch('/_forge/routes').then(r => r.json());
-// 按需懒加载 admin 层级
-const adminRoutes = await fetch('/_forge/routes/admin').then(r => r.json());
-```
-
-## 环境要求
+## Requirements
 
 - PHP `^8.2`
-- Laravel（illuminate）`^11.0 || ^12.0 || ^13.0`
+- Laravel (illuminate) `^11.0 || ^12.0 || ^13.0`
 
-## 安装
+## Install
 
 ```bash
 composer require route-forge/laravel
 
-# 发布配置文件（可选，默认配置开箱可用）
+# Publish the config file (optional — defaults work out of the box)
 php artisan vendor:publish --tag=forge-config
 ```
 
-ServiceProvider 已通过 composer 包发现自动注册。
+The service provider is auto-registered via Laravel package discovery.
 
-## 快速上手
+## Quickstart
 
-### 分配层级
+### Assign tiers
 
 ```php
-// 方式一：显式标记
+// 1) Explicit marker
 Route::post('/auth/login', [AuthController::class, 'login'])
     ->name('auth.login')
     ->tier('public');
 
-// 方式二：分组继承（数组语法）
+// 2) Group inheritance (array syntax)
 Route::group([
     'prefix'     => 'admin',
     'middleware' => ['auth', 'admin'],
@@ -100,98 +89,115 @@ Route::group([
          ->name('admin.users.index');
 });
 
-// 方式三：链式语法（tier 作为流式属性，可与任意路由属性自由组合）
-Route::tier('admin')->group(function () {
-    Route::get('/users', [AdminUserController::class, 'index'])
-         ->name('admin.users.index');
-});
-
-// 链式组合：tier 与 middleware / prefix / as 等任意顺序拼接
+// 3) Fluent chain (tier composes with any route attribute, in any order)
 Route::middleware(['auth', 'admin'])->tier('admin')->prefix('admin')->group(function () {
     Route::get('/users', [AdminUserController::class, 'index'])
          ->name('admin.users.index');
 });
 
-// 方式四：配置批量匹配（config/forge.php）
+// 4) Config-driven batch match (config/forge.php)
 // 'admin' => [
 //     'match' => ['prefix' => ['admin'], 'middleware' => ['auth', 'admin']],
 //     'load'  => 'lazy',
 // ],
 ```
 
-> ⚠️ **注意：组级属性必须在 `group()` 之前声明，不支持 `group()` 返回后追加。**
->
-> `Route::group([...], fn)->tier('admin')` 这类写法 **不会**把 `tier` 应用到该组——Laravel 的
-> `group()` 在返回前已完成组内路由注册并将组属性出栈，其后链式调用无法回溯已注册路由。
->
-> 正确写法二选一：
-> - 数组语法：`Route::group(['tier' => 'admin', ...], fn)`
-> - 前置链式：`Route::tier('admin')->group(fn)`
+> ⚠️ **Group attributes must be declared *before* `group()`.**
+> `Route::group([...], fn)->tier('admin')` does **not** apply the tier — Laravel's `group()`
+> finishes registering child routes and pops the group stack before returning, so a trailing
+> chained call cannot reach them. Use either the array syntax `Route::group(['tier' => 'admin', ...], fn)`
+> or the leading fluent form `Route::tier('admin')->group(fn)`.
 
-### 前端拉取元信息
+### Fetch metadata from the frontend
 
 ```
-GET /_forge/routes              # 所有层级摘要（含 unassigned 特殊层级）+ 全局配置 + schemeVersion 格式版本
-GET /_forge/routes/admin        # admin 层级下所有命名路由的元信息
-GET /_forge/routes/unassigned   # 未分配路由的元信息（特殊层级，未命中任何层级时归入此处）
+GET /_forge/routes              # Summary: all tiers (incl. the special `unassigned` tier) + global config + schemeVersion
+GET /_forge/routes/admin        # Metadata for every named route in the `admin` tier
+GET /_forge/routes/unassigned   # Metadata for routes that matched no tier
 ```
 
-### Artisan 命令
+```js
+// Bootstrap: discover available tiers
+const summary = await fetch('/_forge/routes').then(r => r.json());
+// On demand: load only the tier you need
+const adminRoutes = await fetch('/_forge/routes/admin').then(r => r.json());
+```
+
+### Artisan commands
 
 ```bash
-# 查看所有路由的层级分配（--level 过滤、--json 输出、--unassigned 仅看未分配）
+# Show tier assignment (--level to filter, --json, --unassigned)
 php artisan route:forge:list
 
-# 生成 TS 类型声明（默认 stdout；--out 写文件；--level / --json 可选）
+# Emit TypeScript declarations (stdout by default; --out file; --level / --json)
 php artisan route:forge:types
 
-# 清除路由元信息缓存（--level 仅清除指定层级；不传则清除全部）
-# 执行 Laravel 内置的 php artisan route:clear 时也会自动连带清除
+# Clear route metadata cache (--level for one tier; omit for all).
+# Laravel's built-in `php artisan route:clear` also clears this automatically.
 php artisan route:forge:clear
 ```
 
-## 主要配置项（config/forge.php）
+## Configuration (`config/forge.php`)
 
-| 键                  | 类型             | 默认值             | 说明                                           |
-|---------------------|------------------|--------------------|------------------------------------------------|
-| `levels`            | `array`          | 见配置文件         | 层级定义表（匹配规则、加载策略）               |
-| `endpoint_prefix`   | `string`         | `'/_forge/routes'` | 路由元信息对外端点前缀，同时也是摘要路由       |
-| `url_prefix`        | `string\|null`   | `null`             | 应用路由前缀，经摘要端点下发；支持完整 URL 或路径前缀，空则不下发 |
-| `endpoint_middleware` | `string[]`     | `[]`               | 摘要端点中间件；空数组或 null 不限制           |
-| `cache_ttl`         | `int\|null`      | `3600`             | 统一缓存 TTL（秒）；null 不缓存，`0` 永久缓存，负值视为 null |
-| `cache_driver`      | `string\|null`   | `null`             | 缓存驱动；null 使用默认驱动                    |
-| `strict_mode`       | `bool`           | `false`            | 未命中层级时抛异常（true）或归入 unassigned（false） |
-| `scheme_version`    | `int`            | `1`                | 摘要端点响应格式版本（schemeVersion）          |
-| `classifier`        | `callable\|null` | `null`             | 自定义分类回调 `fn(Route $r): ?string`         |
+| Key | Type | Default | Notes |
+|-----|------|---------|-------|
+| `levels` | `array` | see config file | Tier definition table (match rules, load strategy) |
+| `endpoint_prefix` | `string` | `'/_forge/routes'` | Public metadata endpoint prefix (also the summary route) |
+| `url_prefix` | `string\|null` | `null` | App route prefix delivered via the summary endpoint; absolute URL or path prefix; empty = not delivered |
+| `endpoint_middleware` | `string[]` | `[]` | Middleware on the summary endpoint; empty/null = unrestricted |
+| `cache_ttl` | `int\|null` | `3600` | Shared cache TTL (seconds); `null` = no cache, `0` = forever, negative treated as `null` |
+| `cache_driver` | `string\|null` | `null` | Cache driver; `null` uses the default |
+| `strict_mode` | `bool` | `false` | Throw on a tier miss (`true`) or fall into `unassigned` (`false`) |
+| `scheme_version` | `int` | `1` | Summary response format version (`schemeVersion`) |
+| `classifier` | `callable\|null` | `null` | Custom classifier `fn(Route $r): ?string` |
 
-完整配置项参考（含 `levels.{name}.*` 子键）见 [`.docs/SPEC.md` §5](./.docs/SPEC.md)。
+Full reference (including `levels.{name}.*` sub-keys) is in [`.docs/SPEC.md` §5](./.docs/SPEC.md).
 
-### 开发模式
+### Development mode
 
-当 `APP_DEBUG=true`（Laravel 默认的开发环境配置）时，Route Forge 自动跳过所有缓存读写操作，路由变更即时生效，无需手动清除缓存。生产环境（
-`APP_DEBUG=false`）默认启用缓存以提升性能。
+When `APP_DEBUG=true` (Laravel's default for local dev), Route Forge skips all cache reads/writes so route changes take effect immediately — no manual cache clearing. In production (`APP_DEBUG=false`), caching is enabled for performance.
 
-### 管理器页面
+### Manager page
 
-开发环境下可访问可视化路由管理面板 `GET /_forge/manager`，提供：
+In development, a visual route panel is available at `GET /_forge/manager`:
 
-- **总览**：各层级路由数量卡片，点击快速过滤
-- **路由**：全量路由表格，支持搜索、按层级/HTTP 方法过滤、点击查看详情
-- **配置**：编辑全局设置与 levels 层级配置，保存后直接写入 `config/forge.php`
+- **Overview** — per-tier route counts, click to filter.
+- **Routes** — full route table with search, tier/method filters, and detail view.
+- **Config** — edit global settings and `levels`, saving directly writes `config/forge.php`.
 
-> ⚠️ 仅 `APP_DEBUG=true` 时可用，生产环境不注册任何管理器路由。
-> 开发环境内还受 `manager_allowed_ips` IP 白名单保护（默认仅 `127.0.0.1` / `::1`
-> 本机可访问；局域网调试可追加开发机局域网 IP，详见 `config/forge.php`）。
+> ⚠️ Only registered when `APP_DEBUG=true`; no manager routes exist in production.
+> Even in dev it is guarded by the `manager_allowed_ips` allowlist (default: `127.0.0.1` / `::1`
+> only; append your LAN IP for device testing — see `config/forge.php`).
 
-## 开发
+## Repository & docs
+
+This repository ships the **`route-forge/laravel` composer package** (the backend). It was split out from the route-forge monorepo; the frontend packages (`@route-forge/core`, `@route-forge/vue`, `@route-forge/react`) are maintained separately.
+
+- [`.docs/SPEC.md`](./.docs/SPEC.md) — functional specification (this repo covers §3 backend features, §5 config, §6 error codes).
+- [`.docs/DESIGN.md`](./.docs/DESIGN.md) — design rationale and key technical decisions.
+- [`llms.txt`](./llms.txt) / [`AGENTS.md`](./AGENTS.md) — machine-readable overview and agent integration guide.
+
+## Development
 
 ```bash
 composer install
-composer test            # 运行 PHPUnit 测试套件
-composer test:coverage   # 文本覆盖率报告
+composer test            # run the PHPUnit suite
+composer test:coverage   # text coverage report
 ```
 
-测试基于 [orchestra/testbench](https://github.com/orchestral/testbench)，覆盖层级分配优先级（含资源路由）、中间件匹配（any/all/DNF）、端点响应、缓存、严格模式与三个 Artisan 命令。CI 通过 GitHub Actions 跑 PHP 8.2–8.5 × Laravel 11/12/13 版本矩阵（排除 PHP 8.2 × Laravel 13 组合，见 `.github/workflows/tests.yml`）。
+Tests run on [orchestra/testbench](https://github.com/orchestral/testbench) and cover tier-assignment priority (incl. resource routes), middleware matching (any/all/DNF), endpoint responses, caching, strict mode, and the three Artisan commands. CI runs a PHP 8.2–8.5 × Laravel 11/12/13 matrix on GitHub Actions (excluding PHP 8.2 × Laravel 13; see `.github/workflows/tests.yml`).
+
+## 中文说明（简要）
+
+> 本包面向 **Laravel + 前端 SPA**，把命名路由做成可按“层级（tier）”懒加载的 HTTP 元信息端点，并生成 TypeScript 类型，让前端与后端路由保持单一事实来源。
+
+- **解决什么**：前端不再硬编码 URL、不再一次性导出全部路由、不再每个项目手写 axios 客户端。
+- **定位**：面向独立部署的 SPA（前端 HTML 不经 Laravel 渲染）与路由量大的项目，主打**分级懒加载 + 摘要端点自动发现 + 后端权威配置 + DNF 批量归类**；能力自述见上方 `Why Route Forge`。
+- **四种打层级方式**：`->tier()`、`Route::group(['tier'=>...])`、`Route::tier(...)->group(...)`、`config/forge.php` 匹配规则。
+- **端点**：`GET /_forge/routes`（摘要）、`GET /_forge/routes/{level}`（按层级）、`unassigned`（未命中兜底）。
+- **命令**：`route:forge:list` / `route:forge:types` / `route:forge:clear`。
+- **注意**：组级属性（如 `tier`）必须在 `group()` **之前**声明；`group()` 之后再链式追加不会生效。
+- 完整规格见 [`.docs/SPEC.md`](./.docs/SPEC.md)，设计决策见 [`.docs/DESIGN.md`](./.docs/DESIGN.md)。
 
 ## License
 

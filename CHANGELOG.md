@@ -5,6 +5,22 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Fixed
+
+- `composer.json` 的 `homepage` / `support` 此前误指向前端 monorepo（`route-forge/route-forge`），
+  现修正为本仓库 `route-forge/route-forge-laravel`，并补充 `support.docs`，避免 AI 抓取与 Packagist
+  读到错误的包来源
+
+### Changed
+
+- README 重构为英文优先 + 中文保留：补充价值主张、痛点场景、能力自述、快速上手与常见坑，
+  不做法竞品对比
+- 新增面向 AI 的可发现性资产：`llms.txt`（llmstxt.org 标准入口）、`AGENTS.md`（编码 Agent 集成指南）、
+  `.github/copilot-instructions.md`（Copilot 仓库级指令）
+- `composer.json` 描述改为英文、`keywords` 扩充；GitHub 仓库补全 description / topics
+
 ## [1.2.2] - 2026-08-30
 
 ### Added

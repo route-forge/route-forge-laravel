@@ -1,0 +1,83 @@
+# Route Forge for Laravel
+
+> The backend half of the route-forge project: exposes Laravel named routes to a Vue / React / Inertia SPA through a per-tier, lazy-loadable HTTP metadata endpoint, and generates TypeScript types from the real route registry — no hardcoded frontend URLs, no shipping the whole route table, no annotations. Composer package: `route-forge/laravel`.
+
+## What it is
+
+Route Forge is a Laravel package (`route-forge/laravel`, PHP ^8.2, Laravel ^11|^12|^13, MIT). It reads Laravel's own route registry (`Route::getRoutes()`), assigns each named route to a **tier** (a.k.a. level) you define, and serves the metadata over HTTP so a separately-deployed frontend can build URLs and load only the routes it currently needs.
+
+It is the authoritative backend counterpart to the frontend SDKs `@route-forge/core`, `@route-forge/vue`, and `@route-forge/react` (maintained in a separate repository). The backend owns config; the client discovers it at runtime.
+
+## When to reach for it
+
+- A Laravel API is consumed by a SPA or mobile web app whose HTML is **not** rendered by Laravel (Vite/SPA, standalone frontend).
+- The named-route set is large enough that exporting all of it to the client is wasteful; you want **on-demand, per-tier loading**.
+- You want **one source of truth** for route names/params shared between backend and frontend, with **TypeScript types** generated from the real route table.
+- You want the **backend to authoritatively drive** what the client loads (strict mode, URL prefix, per-tier load strategy).
+
+## Install
+
+```bash
+composer require route-forge/laravel
+php artisan vendor:publish --tag=forge-config   # optional; defaults work out of the box
+```
+
+Service provider is auto-registered via Laravel package discovery.
+
+## Assign tiers (four combinable ways)
+
+1. `->tier('name')` macro on a route (chainable; works on resource routes).
+2. `Route::group(['tier' => 'name', ...], fn)` — group inheritance; nested groups override.
+3. `Route::tier('name')->group(fn)` — fluent form, composes with `middleware` / `prefix` / `as` in any order.
+4. `config/forge.php` match rules — batch-classify by URI prefix / middleware (`any` / `all` / DNF arrays).
+
+Resolution priority (highest first): explicit `->tier()` → group pass-through → `classifier` callback → config match → `unassigned` fallback.
+
+> Gotcha: group attributes must be declared *before* `group()`. `Route::group([...], fn)->tier('admin')` does NOT apply — use the array syntax or `Route::tier('admin')->group(fn)`.
+
+## HTTP endpoints
+
+- `GET /_forge/routes` — summary: all tiers (incl. the special `unassigned` tier) + global config + `schemeVersion`. For client auto-discovery / bootstrap.
+- `GET /_forge/routes/{level}` — metadata (name + URI + method + params) for every named route in that tier. For lazy loading.
+
+## Artisan commands
+
+- `php artisan route:forge:list` — show tier assignment (`--level`, `--json`, `--unassigned`).
+- `php artisan route:forge:types` — emit TypeScript declarations (stdout; `--out <file>`, `--level`, `--json`). Works offline, no HTTP server needed.
+- `php artisan route:forge:clear` — clear metadata cache (`--level`; also auto-cleared by `route:clear`).
+
+## Configuration keys (`config/forge.php`)
+
+- `levels` (array) — tier definitions: match rules + load strategy.
+- `endpoint_prefix` (string, default `/_forge/routes`) — metadata endpoint prefix, also the summary route.
+- `url_prefix` (string|null) — app route prefix delivered via the summary endpoint.
+- `endpoint_middleware` (string[]) — middleware on the summary endpoint; empty/null = unrestricted.
+- `cache_ttl` (int|null, default 3600) — shared TTL; null = no cache, 0 = forever, negative = null.
+- `cache_driver` (string|null) — cache driver; null = default.
+- `strict_mode` (bool, default false) — throw `RouteTierNotAssignedException` on a miss, else fall into `unassigned`.
+- `scheme_version` (int, default 1) — summary response format version.
+- `classifier` (callable|null) — custom `fn(Route $r): ?string`.
+
+## Behavior notes
+
+- **Dev mode**: under `APP_DEBUG=true` all cache reads/writes are skipped, so route changes take effect instantly; caching is on in production.
+- **Manager page**: `GET /_forge/manager` — dev-only visual panel (overview / search / config editing). Registered only when `APP_DEBUG=true`, and guarded by the `manager_allowed_ips` allowlist (default `127.0.0.1` / `::1`).
+- **Design rule**: frontend validation always throws (no silent ignores). `strict_mode` is backend semantics (where an unmatched route goes); the old frontend `strict` flag is deprecated.
+- **Self routes excluded**: the package's own routes (`forge.routes.*`, `forge.manager.*`) are excluded from every metadata scan; otherwise `strict_mode` would 500.
+
+## Optional pairing
+
+For request wrapping, concurrency control, and auth-state-aware tier loading, use the frontend SDK `@route-forge/core` (plus `@route-forge/vue` / `@route-forge/react`) from the separate route-forge frontend repository.
+
+## Links
+
+- [README](https://github.com/route-forge/route-forge-laravel#readme)
+- [SPEC (.docs/SPEC.md)](https://github.com/route-forge/route-forge-laravel/blob/main/.docs/SPEC.md)
+- [DESIGN rationale (.docs/DESIGN.md)](https://github.com/route-forge/route-forge-laravel/blob/main/.docs/DESIGN.md)
+- [CHANGELOG](https://github.com/route-forge/route-forge-laravel/blob/main/CHANGELOG.md)
+- [AGENTS integration guide](https://github.com/route-forge/route-forge-laravel/blob/main/AGENTS.md)
+- [Packagist](https://packagist.org/packages/route-forge/laravel)
+
+## License
+
+MIT © 阿杰
