@@ -35,6 +35,15 @@ Resolution priority (highest first): explicit `->tier()` → group pass-through 
 
 > Gotcha: group attributes must be declared *before* `group()`. `Route::group([...], fn)->tier('admin')` does NOT apply — use the array syntax or `Route::tier('admin')->group(fn)`.
 
+## Route aliases (renaming routes without breaking the frontend)
+
+When a named route is renamed, declare the old name so SPA callers keep working unchanged — the frontend needs zero changes:
+
+1. `->forgeAlias('old.name')` macro on the renamed route (explicit; wins over config; accepts multiple old names).
+2. `config/forge.php` batch map: `'aliases' => ['old.name' => 'new.name']` (key = alias, value = real route name).
+
+Aliases are injected as extra keys into the target route's tier metadata (pure copy, no marker fields), counted in summary `route_count`, and typed by `route:forge:types`. A dangling alias (target missing) throws `AliasTargetException` (RF_BE_008); a colliding alias yields to the real route with a warning. Aliases are a transition tool — audit with `php artisan route:forge:list --aliases` and clean up once the rename settles.
+
 ## HTTP endpoints
 
 - `GET /_forge/routes` — summary: all tiers (incl. the special `unassigned` tier) + global config + `schemeVersion`. For client auto-discovery / bootstrap.
@@ -42,7 +51,7 @@ Resolution priority (highest first): explicit `->tier()` → group pass-through 
 
 ## Artisan commands
 
-- `php artisan route:forge:list` — show tier assignment (`--level`, `--json`, `--unassigned`).
+- `php artisan route:forge:list` — show tier assignment (`--level`, `--json`, `--unassigned`, `--aliases`).
 - `php artisan route:forge:types` — emit TypeScript declarations (stdout; `--out <file>`, `--level`, `--json`). Works offline, no HTTP server needed.
 - `php artisan route:forge:clear` — clear metadata cache (`--level`; also auto-cleared by `route:clear`).
 
@@ -57,6 +66,7 @@ Resolution priority (highest first): explicit `->tier()` → group pass-through 
 - `strict_mode` (bool, default false) — throw `RouteTierNotAssignedException` on a miss, else fall into `unassigned`.
 - `scheme_version` (int, default 1) — summary response format version.
 - `classifier` (callable|null) — custom `fn(Route $r): ?string`.
+- `aliases` (array<string, string>, default `[]`) — route alias map: old route name → new route name; macro `->forgeAlias()` wins when both declare the same alias.
 
 ## Behavior notes
 

@@ -37,6 +37,22 @@ Route::middleware(['auth', 'admin'])->tier('admin')->prefix('admin')->group(func
 
 Priority: explicit `->tier()` > group pass-through > `classifier` callback > config match > `unassigned`.
 
+### Route aliases (renaming routes without breaking the frontend)
+
+When a named route is renamed, declare the old name as an alias so SPA callers keep working unchanged:
+
+```php
+// Fluent (explicit, wins over config) — declare where you rename
+Route::get('/admin/members', [MemberController::class, 'index'])
+    ->name('admin.members.index')->tier('admin')->forgeAlias('admin.users.index');
+```
+
+```php
+// Batch in config/forge.php: 'aliases' => ['admin.users.index' => 'admin.members.index']
+```
+
+Aliases are injected as extra keys into the target route's level metadata (pure copy, no marker fields), counted in summary `route_count`, and typed by `route:forge:types` — the frontend needs zero changes. A dangling alias (target route name missing) throws `AliasTargetException` (RF_BE_008); a colliding alias yields to the real route with a warning. Audit with `route:forge:list --aliases`; clean aliases up once the rename has settled. See [`.docs/SPEC.md` §3.1.7](./.docs/SPEC.md).
+
 ### The one rule agents get wrong
 
 > Group attributes must be declared **before** `group()`. `Route::group([...], fn)->tier('admin')` silently does NOT apply, because `group()` registers children and pops the group stack before returning. Use the array form or `Route::tier('admin')->group(fn)`.
@@ -62,7 +78,7 @@ Run it in the PHP/CI build stage — it reads the in-memory route registry, so i
 
 ## Config keys (`config/forge.php`)
 
-`levels`, `endpoint_prefix`, `url_prefix`, `endpoint_middleware`, `cache_ttl`, `cache_driver`, `strict_mode`, `scheme_version`, `classifier`. See [`.docs/SPEC.md` §5](./.docs/SPEC.md) for the full reference including `levels.{name}.*`.
+`levels`, `endpoint_prefix`, `url_prefix`, `endpoint_middleware`, `cache_ttl`, `cache_driver`, `strict_mode`, `scheme_version`, `classifier`, `aliases`. See [`.docs/SPEC.md` §5](./.docs/SPEC.md) for the full reference including `levels.{name}.*`.
 
 ## Behavior constraints to preserve
 

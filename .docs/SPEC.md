@@ -393,6 +393,45 @@ GET /_forge/routes   # 返回所有层级摘要 + 全局配置
 
 摘要端点同样受 `cache_driver` 与 `cache_ttl` 控制缓存。
 
+#### 3.1.7 路由别名（`forgeAlias` / `aliases`）
+
+路由改名迭代（如 `admin.users.index` → `admin.members.index`）时，别名机制让前端调用方**无需修改路由名**即可继续工作：别名作为额外键注入目标路由所在层级的元信息，与真实路由名并存，指向完全一致的元信息。
+
+**声明通道（二选一或并用）：**
+
+```php
+// 通道一：路由宏（显式，优先级高于 config）——改名时在路由定义处就近声明
+Route::get('/admin/members', [MemberController::class, 'index'])
+    ->name('admin.members.index')
+    ->tier('admin')
+    ->forgeAlias('admin.users.index');          // 可一次声明多个旧名
+```
+
+```php
+// 通道二：config/forge.php 集中声明（适合批量迁移与集中管理）
+'aliases' => [
+    'admin.users.index' => 'admin.members.index',   // 键=别名(旧名)，值=真实路由名(新名)
+],
+```
+
+**合并与冲突规则**（对齐 §3.1.4 的显式 > 配置哲学）：
+
+- 同一别名同时经宏与 config 声明时，**宏（显式）优先**；config 中目标不同则记录警告。
+- 别名与真实路由名撞车时，**真实路由优先**，别名被忽略（`route:forge:list` 的 warnings 中提示）。
+- 别名指向的路由名不存在（悬空，常见于路由删除后忘记清理别名）→ 抛 `AliasTargetException`（RF_BE_008），fail-fast。
+
+**行为细节：**
+
+- 别名条目出现在**目标路由所在层级**的端点响应中（含 `unassigned` 特殊层级），元信息（`uri` / `methods` / `parameters` / `parameter_defaults`）与目标路由**完全一致（纯复制，无附加标记字段）**——对前端而言别名就是一个真实存在的路由名，校验与类型推断自然通过，**前端零改动**。
+- 摘要端点 `route_count` 计入别名，与层级端点实际返回的 `routes` 键数量保持一致。
+- `route:forge:types` 为别名生成与目标一致的类型条目，TS 侧旧名仍合法。
+- `route:forge:list` 显示别名条目（`alias_of` 字段 / `Alias Of` 列，见 §3.2），支持 `--aliases` 过滤。
+- 管理器页面（§3.3）为别名条目打「别名」标并显示指向。
+- 别名是**元信息层概念**：不参与层级解析（§3.1.4）、不受 `strict_mode` 影响、旧 URI 本身不可访问；解析结果随扫描进入缓存（§3.1.5 缓存策略）。
+- 资源路由不支持别名（`Route::resource(...)->forgeAlias()` 无定义——资源路由一次生成多条命名路由，别名指向存在歧义；如需别名请在展开后的具体路由上声明）。
+
+> 别名是**过渡手段**：改名稳定后应及时清理（`route:forge:list --aliases` 查看、grep `forgeAlias`），避免路由表长期新旧两套名字并存。`schemeVersion` 不因别名递增——routes 多出条目对既有前端无破坏，属向后兼容增量。
+
 #### 3.2 Artisan命令
 
 #### `php artisan route:forge:list`
@@ -408,17 +447,19 @@ php artisan route:forge:list --level=admin
 php artisan route:forge:list --json
 # 仅显示未分配层级的路由
 php artisan route:forge:list --unassigned
+# 仅显示别名条目（旧名 → 真实路由名，见 §3.1.7）
+php artisan route:forge:list --aliases
 ```
 
 输出示例：
 
-| Name                | Level      | Methods   | URI                |
-|---------------------|------------|-----------|--------------------|
-| auth.login          | public     | POST      | auth/login         |
-| admin.users.index   | admin      | GET\|HEAD | admin/users        |
-| admin.users.show    | admin      | GET\|HEAD | admin/users/{user} |
-| client.orders.store | client     | POST      | client/orders      |
-| debug.info          | unassigned | GET\|HEAD | _debug/info        |
+| Name                | Level      | Methods   | URI                | Alias Of            |
+|---------------------|------------|-----------|--------------------|---------------------|
+| auth.login          | public     | POST      | auth/login         | —                   |
+| admin.users.index   | admin      | GET\|HEAD | admin/members      | admin.members.index |
+| admin.members.index | admin      | GET\|HEAD | admin/members      | —                   |
+| client.orders.store | client     | POST      | client/orders      | —                   |
+| debug.info          | unassigned | GET\|HEAD | _debug/info        | —                   |
 
 行为说明：
 
@@ -427,6 +468,7 @@ php artisan route:forge:list --unassigned
 - `--level` 过滤时，若层级名不存在则提示可用层级列表；`unassigned` 特殊层级也可作为 `--level` 过滤值。
 - `--unassigned` 仅显示未命中任何层级的路由，与 `--level=unassigned` 等价。
 - 未分配路由在 table 输出中以 `unassigned` 显示（与 JSON 输出及特殊层级名保持一致）。
+- 别名条目（§3.1.7）跟随目标路由的层级与过滤条件显示，`Alias Of` 列（JSON 中为 `alias_of` 字段）标注指向的真实路由名；别名撞车被忽略等非致命问题以 warnings 提示（table 模式在表格后输出警告行）。
 
 ##### `--json` 输出结构
 
@@ -437,18 +479,28 @@ php artisan route:forge:list --unassigned
   "levels": ["public", "client", "manage", "admin", "unassigned"],
   "filter": null,
   "count": 5,
+  "warnings": [],
   "routes": [
     {
       "name": "auth.login",
       "level": "public",
       "methods": ["POST"],
-      "uri": "auth/login"
+      "uri": "auth/login",
+      "alias_of": null
+    },
+    {
+      "name": "admin.users.index",
+      "level": "admin",
+      "methods": ["GET"],
+      "uri": "admin/members",
+      "alias_of": "admin.members.index"
     },
     {
       "name": "debug.info",
       "level": "unassigned",
       "methods": ["GET"],
-      "uri": "_debug/info"
+      "uri": "_debug/info",
+      "alias_of": null
     }
   ]
 }
@@ -457,9 +509,10 @@ php artisan route:forge:list --unassigned
 字段说明：
 
 - `levels`：当前可用层级列表（始终含 `unassigned` 特殊层级）。
-- `filter`：当前过滤条件（`--level` / `--unassigned`），无过滤时为 `null`。
+- `filter`：当前过滤条件（`--level` / `--unassigned` / `--aliases`），无过滤时为 `null`。
 - `count`：匹配路由总数。
-- `routes`：路由条目数组，每条含 `name`、`level`（未分配为 `"unassigned"`）、`methods`、`uri`。
+- `warnings`：非致命问题（如别名撞车被忽略），供 CI/脚本检测别名配置问题；无问题时为空数组。
+- `routes`：路由条目数组，每条含 `name`、`level`（未分配为 `"unassigned"`）、`methods`、`uri`、`alias_of`（真实路由名为 `null`，别名为指向的目标路由名，见 §3.1.7）。
 
 > 设计意图：开发阶段最常被问到的问题是"我的路由到底被分到了哪个层级"。这个命令让开发者无需启动前端、无需打开浏览器，一条命令即可验证配置效果。
 
@@ -689,6 +742,7 @@ PUT /_forge/manager/api/config   # 更新配置文件
 | `strict_mode`                          | `bool`                       | `false`            | 严格模式；未命中层级时抛异常（true）或归入 `unassigned` 特殊层级（false）                                                                                                                         |
 | `scheme_version`                       | `int`                        | `1`                | 摘要端点返回的响应格式版本号（`schemeVersion` 字段）；后续迭代引入不兼容的格式变更时递增，前端据此做版本兼容                                                                                      |
 | `classifier`                           | `callable\|null`             | `null`             | 自定义分类回调，签名 `fn(Route $r): ?string`，返回层级名或 null。返回的层级名必须在 `levels` 配置中存在，否则抛 `UnknownClassifierTierException`                                                  |
+| `aliases`                              | `array<string, string>`      | `[]`               | 路由别名映射表（见 §3.1.7）：键=别名（旧路由名），值=真实路由名（新名）。与 `->forgeAlias()` 宏并用时宏优先；悬空别名抛 `AliasTargetException`                                                     |
 | `manager_allowed_ips`                  | `string[]\|null`             | `['127.0.0.1', '::1']` | 管理器页面 IP 白名单（仅 `APP_DEBUG=true` 有意义，线上不注册管理器路由可无视）：精确匹配来源 IP，`'*'` 放行任意来源，`null`/空数组不做限制                                                          |
 
 ## 6. 错误码
@@ -704,12 +758,14 @@ PUT /_forge/manager/api/config   # 更新配置文件
 | `RouteMissingNameException`             | `RF_BE_005` | `strict_mode=true` 且路由设置了 tier 但没有路由名                       | 500       |
 | `UnknownClassifierTierException`        | `RF_BE_006` | `classifier` 返回的层级名不在 `levels` 配置中                           | 500       |
 | `DiscardedRegistrarAttributesException` | `RF_BE_007` | `strict_mode=true` 且 `Route::group(...)->tier(...)` 尾部链式属性被丢弃 | 500       |
+| `AliasTargetException`                  | `RF_BE_008` | 别名指向的路由名不存在（悬空别名，见 §3.1.7）                          | 500       |
 
 ## 7. 测试矩阵
 
 | 测试维度     | 覆盖点                                                                                                                                 |
 |--------------|----------------------------------------------------------------------------------------------------------------------------------------|
 | 层级分配     | 显式 `->tier()`、资源路由（resource/apiResource/singleton/apiSingleton）tier 与 `->only()` 组合、配置 match、`Route::group`（数组/链式）透传、classifier（含返回非串降级、抛错包装为 ClassifierException）、unassigned 兜底、优先级覆盖、**多层级同时命中取最后一个** |
+| 路由别名     | `->forgeAlias()` 宏（单个/多个/空参报错）、config `aliases`、**宏优先于 config**、别名与真实路由名撞车忽略（list warnings）、悬空别名 RF_BE_008、别名元信息与目标纯复制一致、跟随目标层级（含 unassigned）、摘要 `route_count` 计入别名、`route:forge:types` 别名条目、`route:forge:list --aliases` 过滤、别名随扫描缓存 |
 | Artisan 命令 | `route:forge:list` 输出格式（table/json）、按层级过滤、unassigned 路由显示、`--level` 参数过滤                                         |
 | Artisan 命令 | `route:forge:types` 生成 d.ts 二级结构（层级 → 路由名）、`--level` 过滤、`--json` 二级 JSON 输出、`--out` 写文件                       |
 | Artisan 命令 | `route:forge:clear` 全量清除缓存、按层级清除、无效层级名报错                                                                           |

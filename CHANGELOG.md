@@ -7,6 +7,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- 路由别名机制（SPEC §3.1.7）：路由改名迭代时，前端调用方无需修改路由名即可继续工作
+  - 双通道声明：路由宏 `->forgeAlias('旧名', ...)`（显式，优先级高，改名处就近声明）
+    与 config `aliases` 集中映射表（批量迁移），并用时宏优先
+  - 别名作为额外键注入目标路由所在层级的元信息端点（含 `unassigned` 特殊层级），
+    元信息与目标路由完全一致（纯复制）——前端校验与类型推断自然通过，前端零改动
+  - 摘要端点 `route_count` 计入别名，与层级端点 `routes` 键数量保持一致
+  - `route:forge:types` 为别名生成与目标一致的类型条目（TS 侧旧名仍合法）
+  - `route:forge:list` 显示别名条目（`Alias Of` 列 / JSON `alias_of` 字段）、
+    新增 `--aliases` 过滤、撞车等非致命问题以 `warnings` 输出
+  - 管理器页面为别名条目打「别名」标并显示指向
+  - 悬空别名（指向不存在的路由名）抛新异常 `AliasTargetException`（RF_BE_008，500），fail-fast
+  - 别名是元信息层概念：不参与层级解析、不受 `strict_mode` 影响、旧 URI 本身不可访问；
+    `schemeVersion` 不递增（向后兼容增量）
+
 ### Fixed
 
 - `composer.json` 的 `homepage` / `support` 此前误指向前端 monorepo（`route-forge/route-forge`），
