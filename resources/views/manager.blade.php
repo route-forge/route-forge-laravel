@@ -59,6 +59,8 @@
         .srch input:focus { border-color: var(--pri) }
         .srch svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--tx2) }
         .fg { display: flex; gap: 6px; flex-wrap: wrap }
+        .afg { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--tx2); cursor: pointer; user-select: none }
+        .afg input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--pri); cursor: pointer }
         .fb {
             padding: 6px 14px; border: 1px solid var(--bd); border-radius: 20px; font-size: 13px;
             cursor: pointer; background: var(--sf); color: var(--tx2); transition: .15s; white-space: nowrap
@@ -76,6 +78,7 @@
         tr:hover td { background: #fafbfc }
         tr:last-child td { border-bottom: none }
         .rn { font-family: var(--mn); font-size: 13px; font-weight: 500; cursor: pointer }
+        .ab { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 8px; font-size: 11px; background: var(--acc-s, rgba(59,130,246,.15)); color: var(--acc, #3b82f6); cursor: help }
         .rn:hover { color: var(--pri) }
         .ru { font-family: var(--mn); font-size: 12px; color: var(--tx2) }
         .mb { display: inline-block; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; color: #fff; margin-right: 3px; letter-spacing: .3px }
@@ -84,13 +87,7 @@
         .m-PUT { background: var(--put) }
         .m-DELETE { background: var(--del) }
         .m-PATCH { background: var(--patch) }
-        .tb { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600 }
-        .t-public { color: #2b6cb0 }
-        .t-client { color: #276749 }
-        .t-manage { color: #c05621 }
-        .t-admin { color: #c53030 }
-        .t-unassigned { color: #718096 }
-        .t-def { color: #6b46c1 }
+        .tb { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; color: #fff; }
         .emp { padding: 48px; text-align: center; color: var(--tx2); font-size: 14px }
         .mwl { display: flex; flex-wrap: wrap; gap: 4px }
         .mwt { font-size: 11px; padding: 1px 6px; border: 1px solid var(--bd); border-radius: 3px; color: var(--tx2); font-family: var(--mn) }
@@ -112,7 +109,7 @@
         .fd label { font-size: 12px; font-weight: 600; color: var(--tx2) }
         .fd input, .fd select { padding: 8px 12px; border: 1px solid var(--bd); border-radius: var(--r); font-size: 14px; outline: none; font-family: var(--fn) }
         .fd input:focus, .fd select:focus { border-color: var(--pri) }
-        .fdc { flex-direction: row; align-items: center; gap: 8px }
+        .fdc { flex-direction: row; align-items: center; gap: 8px; padding-top: 22px; }
         .fdc input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--pri) }
         .je { width: 100%; min-height: 400px; padding: 16px; border: 1px solid var(--bd); border-radius: var(--r); font-family: var(--mn); font-size: 13px; line-height: 1.6; resize: vertical; outline: none; tab-size: 2 }
         .je:focus { border-color: var(--pri) }
@@ -187,6 +184,9 @@
                 <button class="fb" data-m="PUT">PUT</button>
                 <button class="fb" data-m="DELETE">DELETE</button>
             </div>
+            <label class="afg" title="仅显示别名条目（旧路由名 → 真实路由名）">
+                <input type="checkbox" id="af"> 仅别名
+            </label>
             <span class="rcnt" id="rc"></span>
         </div>
         <div class="tw">
@@ -235,7 +235,7 @@
   const TC = { public: 'blue', client: 'green', manage: 'orange', admin: 'pri', unassigned: 'gray' };
   const tc = t => TC[t] || 'purple';
   const esc = s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
-  const S = { tab: 'overview', q: '', tf: null, mf: null };
+  const S = { tab: 'overview', q: '', tf: null, mf: null, aliasOnly: false };
   const $ = s => document.querySelector(s);
   const $$ = s => document.querySelectorAll(s);
   let searchTimer = null;
@@ -320,7 +320,8 @@
     const frag = document.createDocumentFragment();
     f.forEach(r => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td><span class="rn" onclick="showD('${esc(r.name)}')">${esc(r.name)}</span></td><td>${TPL.tierBadge(r.tier)}</td><td>${r.methods.map(TPL.method).join('')}</td><td class="ru">${esc(r.uri)}</td><td>${TPL.middleware(r.middleware)}</td>`;
+      const ab = r.alias_of ? `<span class="ab" title="别名 → ${esc(r.alias_of)}（旧名仍可被前端使用）">别名</span>` : '';
+      tr.innerHTML = `<td><span class="rn" onclick="showD('${esc(r.name)}')">${esc(r.name)}</span>${ab}</td><td>${TPL.tierBadge(r.tier)}</td><td>${r.methods.map(TPL.method).join('')}</td><td class="ru">${esc(r.uri)}</td><td>${TPL.middleware(r.middleware)}</td>`;
       frag.appendChild(tr);
     });
     tb.innerHTML = '';
@@ -328,11 +329,13 @@
   }
 
   function filtered() {
-    if (S.tf && S.mf) return D.routes.filter(r => r.tier === S.tf && r.methods.includes(S.mf) && (!S.q || (r.name + ' ' + r.uri + ' ' + r.middleware.join(' ')).toLowerCase().includes(S.q.toLowerCase())));
-    if (S.tf) return D.routes.filter(r => r.tier === S.tf && (!S.mf || r.methods.includes(S.mf)) && (!S.q || (r.name + ' ' + r.uri + ' ' + r.middleware.join(' ')).toLowerCase().includes(S.q.toLowerCase())));
-    if (S.mf) return D.routes.filter(r => r.methods.includes(S.mf) && (!S.q || (r.name + ' ' + r.uri + ' ' + r.middleware.join(' ')).toLowerCase().includes(S.q.toLowerCase())));
-    if (S.q) return D.routes.filter(r => (r.name + ' ' + r.uri + ' ' + r.middleware.join(' ')).toLowerCase().includes(S.q.toLowerCase()));
-    return D.routes;
+    const q = S.q ? S.q.toLowerCase() : null;
+    return D.routes.filter(r =>
+      (!S.tf || r.tier === S.tf) &&
+      (!S.mf || r.methods.includes(S.mf)) &&
+      (!S.aliasOnly || r.alias_of) &&
+      (!q || (r.name + ' ' + r.uri + ' ' + r.middleware.join(' ')).toLowerCase().includes(q))
+    );
   }
 
   function filterT(t) {
@@ -349,7 +352,8 @@
     const ps = r.parameters.length ? r.parameters.map(p => `<div style="font-family:var(--mn)">${esc(p)}${r.parameter_defaults[p] !== undefined ? ` <span style="color:var(--tx2)">(默认: ${esc(String(r.parameter_defaults[p]))})</span>` : ''}</div>`).join('') : '<span style="color:var(--tx2)">无参数</span>';
     const mw = r.middleware.length ? r.middleware.map(m => `<span class="mwt">${esc(m)}</span>`).join(' ') : '<span style="color:var(--tx2)">无</span>';
     $('#mt').textContent = r.name;
-    $('#mbd').innerHTML = `<div class="dr"><div class="dl">层级</div><div>${TPL.tierBadge(r.tier)}</div></div><div class="dr"><div class="dl">URI</div><div class="dv">${esc(r.uri)}</div></div><div class="dr"><div class="dl">HTTP 方法</div><div>${r.methods.map(TPL.method).join(' ')}</div></div><div class="dr"><div class="dl">路径参数</div><div>${ps}</div></div><div class="dr"><div class="dl">中间件</div><div class="mwl">${mw}</div></div>`;
+    const aliasRow = r.alias_of ? `<div class="dr"><div class="dl">别名指向</div><div class="dv">${esc(r.alias_of)}</div></div>` : '';
+    $('#mbd').innerHTML = `<div class="dr"><div class="dl">层级</div><div>${TPL.tierBadge(r.tier)}</div></div>${aliasRow}<div class="dr"><div class="dl">URI</div><div class="dv">${esc(r.uri)}</div></div><div class="dr"><div class="dl">HTTP 方法</div><div>${r.methods.map(TPL.method).join(' ')}</div></div><div class="dr"><div class="dl">路径参数</div><div>${ps}</div></div><div class="dr"><div class="dl">中间件</div><div class="mwl">${mw}</div></div>`;
     $('#modal').classList.add('show');
   }
 
@@ -387,6 +391,10 @@
       S.mf = wasOn ? null : m;
       $$('#mf .fb').forEach(x => x.classList.remove('on'));
       if (!wasOn) b.classList.add('on');
+      renderRT();
+    });
+    $('#af').addEventListener('change', e => {
+      S.aliasOnly = e.target.checked;
       renderRT();
     });
     $('#mc').addEventListener('click', () => $('#modal').classList.remove('show'));

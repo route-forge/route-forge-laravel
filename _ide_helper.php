@@ -4,7 +4,7 @@
  * IDE Helper for Route Forge Laravel.
  *
  * 本文件为静态分析工具（PHPStorm / Intelephense / Larastan）提供
- * `->tier()` 宏与 `Route::group(['tier' => ...])` 的类型提示。
+ * `->tier()` / `->forgeAlias()` 宏与 `Route::group(['tier' => ...])` 的类型提示。
  * 运行时不会加载此文件。
  *
  * @see \RouteForge\Laravel\ForgeServiceProvider::registerTierMacro()
@@ -33,6 +33,33 @@ namespace Illuminate\Routing {
          * @return $this
          */
         public function tier(string $tier): static
+        {
+            return $this;
+        }
+
+        /**
+         * 为该路由声明一个或多个旧名别名（路由改名迭代用，SPEC §3.1.7）。
+         *
+         * 别名将作为额外键注入该路由所在层级的元信息端点（元信息与本路由完全一致），
+         * 并由 route:forge:types 生成类型条目——前端继续使用旧名，零改动。
+         * 优先级高于 config/forge.php 的 aliases 配置；别名与真实路由名撞车时真实路由优先；
+         * config 侧别名指向不存在的路由名会抛 AliasTargetException（RF_BE_008）。
+         *
+         * 用法示例：
+         * ```php
+         * Route::get('/admin/members', [MemberController::class, 'index'])
+         *     ->name('admin.members.index')
+         *     ->tier('admin')
+         *     ->forgeAlias('admin.users.index', 'admin.users.list');
+         * ```
+         *
+         * 注意：资源路由（Route::resource 等）不支持本宏——资源路由一次生成多条
+         * 命名路由，别名指向存在歧义；请在展开后的具体路由上声明。
+         *
+         * @param string ...$aliases 旧路由名列表（别名，前端继续使用的名字）
+         * @return $this
+         */
+        public function forgeAlias(string ...$aliases): static
         {
             return $this;
         }

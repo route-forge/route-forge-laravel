@@ -38,7 +38,12 @@ readonly class RouteRepository
         private TierResolver $tierResolver,
         private RouteCache   $cache,
         private array        $levelsConfig,
-    ) {}
+        private array        $aliasesConfig = [],
+    ) {
+        $this->aliasResolver = new AliasResolver($aliasesConfig);
+    }
+
+    private readonly AliasResolver $aliasResolver;
 
     /**
      * 取某层级下所有命名路由的元信息（带缓存）。
@@ -48,6 +53,9 @@ readonly class RouteRepository
      *
      * 包自身端点路由（forge.*）与框架内部路由（如 storage.*）在所有扫描中排除；
      * routes 字段为 stdClass，空层级序列化为 {}（按路由名索引的对象契约）。
+     *
+     * 别名（SPEC §3.1.7）：经 ->forgeAlias() 宏或 config aliases 声明的旧名
+     * 作为额外键注入目标路由所在层级的 routes，元信息与目标路由完全一致。
      *
      * @return array{
      *   level:string,
@@ -91,6 +99,17 @@ readonly class RouteRepository
                     'parameters'         => $route->parameterNames(),
                     'parameter_defaults' => (object)$route->defaults,
                 ];
+            }
+        }
+
+        // 别名注入（SPEC §3.1.7）：别名条目出现在目标路由所在层级的 routes 中，
+        // 元信息与目标路由完全一致（纯复制，无附加标记字段）。
+        // unassigned 特殊层级同样注入（别名跟随目标路由的层级归属）。
+        // 解析结果随扫描进缓存；悬空别名在此 fail-fast（RF_BE_008）。
+        $aliases = $this->aliasResolver->resolve($this->router->getRoutes())['aliases'];
+        foreach ($aliases as $alias => $target) {
+            if (isset($routes[$target])) {
+                $routes[$alias] = $routes[$target];
             }
         }
 
@@ -223,12 +242,16 @@ readonly class RouteRepository
      * 一次遍历同时统计各层级命中数和 unassigned 数，
      * 避免 getSummary() 再调用 getUnassignedRoutes() 造成二次全量扫描。
      *
+     * 别名（SPEC §3.1.7）计入目标路由所在层级的 route_count，
+     * 与层级端点实际返回的 routes 键数量保持一致。
+     *
      * @return array{counts: array<string,int>, unassigned: int}
      */
     private function countRoutesPerLevel(): array
     {
         $counts = [];
         $unassigned = 0;
+        $levelByName = []; // 真实路由名 => 层级（含 unassigned），供别名归属统计
         foreach ($this->router->getRoutes() as $route) {
             $name = $route->getName();
             if ($name === null) {
@@ -241,10 +264,24 @@ readonly class RouteRepository
             $resolved = $this->tierResolver->resolve($route);
             if ($resolved !== null) {
                 $counts[$resolved] = ($counts[$resolved] ?? 0) + 1;
+                $levelByName[$name] = $resolved;
             } else {
                 $unassigned++;
+                $levelByName[$name] = self::UNASSIGNED_LEVEL;
             }
         }
+
+        // 别名计入目标路由所在层级（unassigned 归入特殊层级计数）
+        $aliases = $this->aliasResolver->resolve($this->router->getRoutes())['aliases'];
+        foreach ($aliases as $target) {
+            $targetLevel = $levelByName[$target] ?? null;
+            if ($targetLevel === self::UNASSIGNED_LEVEL) {
+                $unassigned++;
+            } elseif ($targetLevel !== null) {
+                $counts[$targetLevel] = ($counts[$targetLevel] ?? 0) + 1;
+            }
+        }
+
         return ['counts' => $counts, 'unassigned' => $unassigned];
     }
 
@@ -288,6 +325,28 @@ readonly class RouteRepository
                 'parameter_defaults' => (array)$route->defaults,
                 'middleware'         => $route->gatherMiddleware(),
                 'tier'               => $tier,
+            ];
+        }
+
+        // 别名条目（SPEC §3.1.7）：带 alias_of 标记，跟随目标路由的层级归属；
+        // 撞车被丢弃的别名由 resolver 的 warnings 反映，管理器侧忽略（条目不出现即被丢弃）
+        $aliasMap  = $this->aliasResolver->resolve($this->router->getRoutes());
+        $rowByName = array_column($routes, null, 'name');
+        foreach ($aliasMap['aliases'] as $alias => $target) {
+            $targetRow = $rowByName[$target] ?? null;
+            if ($targetRow === null) {
+                continue; // 目标为未命名/被排除路由，不可能（resolver 已保证目标为真实命名路由）；防御性跳过
+            }
+            $tiers[$targetRow['tier']] = ($tiers[$targetRow['tier']] ?? 0) + 1;
+            $routes[] = [
+                'name'               => $alias,
+                'uri'                => $targetRow['uri'],
+                'methods'            => $targetRow['methods'],
+                'parameters'         => $targetRow['parameters'],
+                'parameter_defaults' => $targetRow['parameter_defaults'],
+                'middleware'         => $targetRow['middleware'],
+                'tier'               => $targetRow['tier'],
+                'alias_of'           => $target,
             ];
         }
 

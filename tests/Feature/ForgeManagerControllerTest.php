@@ -78,6 +78,26 @@ class ForgeManagerControllerTest extends TestCase
         $this->assertArrayHasKey('unassigned', $data['tiers']);
     }
 
+    public function test_routes_api_marks_alias_entries(): void
+    {
+        // 宏声明别名：admin.members.index 的旧名 admin.users.index（SPEC §3.1.7）
+        RouteFacade::get('/admin/members', static function () {})
+            ->name('admin.members.index')
+            ->tier('admin')
+            ->forgeAlias('admin.users.index');
+
+        $data = $this->get('/_forge/manager/api/routes')->json();
+
+        $rowsByName = array_column($data['routes'], null, 'name');
+        $aliasRow = $rowsByName['admin.users.index'] ?? null;
+        $this->assertNotNull($aliasRow, 'alias entry should appear in manager data');
+        $this->assertSame('admin.members.index', $aliasRow['alias_of']);
+        $this->assertSame($rowsByName['admin.members.index']['tier'], $aliasRow['tier']);
+        $this->assertSame($rowsByName['admin.members.index']['uri'], $aliasRow['uri']);
+        // 真实路由条目不带 alias_of 键
+        $this->assertArrayNotHasKey('alias_of', $rowsByName['admin.members.index']);
+    }
+
     public function test_config_api_returns_levels_and_global(): void
     {
         $payload = $this->get('/_forge/manager/api/config')->json();

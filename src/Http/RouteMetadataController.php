@@ -28,6 +28,7 @@ class RouteMetadataController extends Controller
      *   - RouteTierNotAssignedException (RF_BE_001) → 500
      *   - CacheDriverException (RF_BE_003)          → 500
      *   - ClassifierException (RF_BE_004)            → 500
+     *   - AliasTargetException (RF_BE_008)           → 500
      */
     public function show(string $level): JsonResponse
     {
@@ -57,6 +58,7 @@ class RouteMetadataController extends Controller
      * 异常映射（§6.1）：
      *   - CacheDriverException (RF_BE_003) → 500
      *   - ClassifierException (RF_BE_004) → 500
+     *   - AliasTargetException (RF_BE_008) → 500
      */
     public function index(): JsonResponse
     {

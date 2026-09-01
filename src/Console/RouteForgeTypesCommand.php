@@ -7,6 +7,8 @@ namespace RouteForge\Laravel\Console;
 use Illuminate\Console\Command;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\File;
+use RouteForge\Laravel\AliasResolver;
+use RouteForge\Laravel\Exceptions\ForgeExceptionContract;
 use RouteForge\Laravel\RouteRepository;
 use RouteForge\Laravel\TierResolver;
 
@@ -83,6 +85,25 @@ class RouteForgeTypesCommand extends Command
                 // response 始终为 unknown（v1.0 不支持自定义响应类型）
                 'response' => 'unknown',
             ];
+        }
+
+        // 别名注入（SPEC §3.1.7）：为别名生成与目标路由一致的类型条目，
+        // 使前端在路由改名后继续使用旧名时 TS 类型仍合法。
+        // 目标在 unassigned 层级时不生成类型（与真实路由的规则一致，见上方收集逻辑）。
+        $aliasResolver = new AliasResolver((array) config('forge.aliases', []));
+        try {
+            $aliasResolution = $aliasResolver->resolve($router->getRoutes());
+        } catch (ForgeExceptionContract $e) {
+            $this->error("[{$e->code()}] {$e->getMessage()}");
+            return 1;
+        }
+        foreach ($aliasResolution['aliases'] as $alias => $target) {
+            foreach ($routesByLevel as $level => $levelRoutes) {
+                if (isset($levelRoutes[$target])) {
+                    $routesByLevel[$level][$alias] = $levelRoutes[$target];
+                    break;
+                }
+            }
         }
 
         // 输出
