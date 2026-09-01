@@ -11,6 +11,8 @@ Route Forge exposes Laravel's named routes through a small HTTP metadata endpoin
 [![Tests](https://img.shields.io/github/actions/workflow/status/route-forge/route-forge-laravel/tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/route-forge/route-forge-laravel/actions)
 [![License](https://img.shields.io/github/license/route-forge/route-forge-laravel.svg?style=flat-square)](./LICENSE)
 
+**语言 / Language:** [English](./README.md) · [简体中文](./README_zh.md)
+
 > **For AI assistants / coding agents:** this package is [`route-forge/laravel`](https://packagist.org/packages/route-forge/laravel). A machine-readable overview is available at [`llms.txt`](./llms.txt), and integration guidance for agents is in [`AGENTS.md`](./AGENTS.md).
 
 ## What problem it solves
@@ -186,18 +188,6 @@ composer test:coverage   # text coverage report
 ```
 
 Tests run on [orchestra/testbench](https://github.com/orchestral/testbench) and cover tier-assignment priority (incl. resource routes), middleware matching (any/all/DNF), endpoint responses, caching, strict mode, and the three Artisan commands. CI runs a PHP 8.2–8.5 × Laravel 11/12/13 matrix on GitHub Actions (excluding PHP 8.2 × Laravel 13; see `.github/workflows/tests.yml`).
-
-## 中文说明（简要）
-
-> 本包面向 **Laravel + 前端 SPA**，把命名路由做成可按“层级（tier）”懒加载的 HTTP 元信息端点，并生成 TypeScript 类型，让前端与后端路由保持单一事实来源。
-
-- **解决什么**：前端不再硬编码 URL、不再一次性导出全部路由、不再每个项目手写 axios 客户端。
-- **定位**：面向独立部署的 SPA（前端 HTML 不经 Laravel 渲染）与路由量大的项目，主打**分级懒加载 + 摘要端点自动发现 + 后端权威配置 + DNF 批量归类**；能力自述见上方 `Why Route Forge`。
-- **四种打层级方式**：`->tier()`、`Route::group(['tier'=>...])`、`Route::tier(...)->group(...)`、`config/forge.php` 匹配规则。
-- **端点**：`GET /_forge/routes`（摘要）、`GET /_forge/routes/{level}`（按层级）、`unassigned`（未命中兜底）。
-- **命令**：`route:forge:list` / `route:forge:types` / `route:forge:clear`。
-- **注意**：组级属性（如 `tier`）必须在 `group()` **之前**声明；`group()` 之后再链式追加不会生效。
-- 完整规格见 [`.docs/SPEC.md`](./.docs/SPEC.md)，设计决策见 [`.docs/DESIGN.md`](./.docs/DESIGN.md)。
 
 ## License
 
