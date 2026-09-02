@@ -112,6 +112,8 @@ Laravel 路由定义里天然包含 HTTP 方法（GET/POST/PUT/DELETE），没�
 
 最终决策：取消 Blade 注入，所有后端配置下发均通过摘要端点，前端在 `createRouteForge()` 初始化时按需请求。
 
+> **后续演进（`@forgeSummary` 可选首页内嵌）**：上述"取消"针对的是把 Blade 注入当作**唯一**配置下发通道——那会让 SPA 独立部署与 Vite dev 两类无 Blade 渲染的场景失效。如今重新引入的是一个**叠加在摘要端点之上的可选加速**：仅对「由 Laravel 服务端渲染 HTML、JS 只在浏览器执行」的首页，用 `@forgeSummary` 把摘要内嵌进 `<head>`，让前端跳过首屏的一次摘要 HTTP 往返。摘要端点与层级端点原样保留、仍是默认与回落路径——未书写指令的页面（含 SPA / Vite dev）行为完全不变，不注入、走网络摘要。层级路由明细**始终按 level 走 HTTP 懒加载**，绝不内嵌（受保护路由不得预置进公开 HTML）。契约与实现见 SPEC §3.1.8。
+
 ### 6.4 为什么类型由后端 Artisan 命令生成
 
 早期考虑过由前端 CLI（请求摘要端点）生成 TS 类型，最终改为后端 `route:forge:types` Artisan 命令，理由：

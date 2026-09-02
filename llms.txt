@@ -49,6 +49,8 @@ Aliases are injected as extra keys into the target route's tier metadata (pure c
 - `GET /_forge/routes` — summary: all tiers (incl. the special `unassigned` tier) + global config + `schemeVersion`. For client auto-discovery / bootstrap.
 - `GET /_forge/routes/{level}` — metadata (name + URI + method + params) for every named route in that tier. For lazy loading.
 
+**Optional first-page embedding** — for Blade/SSR-rendered homepages, the `@forgeSummary` directive inlines the *summary endpoint's* payload into `<head>` as a one-time, self-deleting, non-enumerable `window.__ROUTE_FORGE__` accessor, letting `@route-forge/core` skip the first summary HTTP round-trip. It reuses the same producer/cache as the endpoint (byte-for-byte), never inlines per-tier route tables (those still load lazily over HTTP), and does **not** add an HTTP endpoint or bump `schemeVersion`. Pages that don't use it (pure SPA / Vite dev) fall back to the network summary unchanged.
+
 ## Artisan commands
 
 - `php artisan route:forge:list` — show tier assignment (`--level`, `--json`, `--unassigned`, `--aliases`).

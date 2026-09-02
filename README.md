@@ -125,6 +125,25 @@ const summary = await fetch('/_forge/routes').then(r => r.json());
 const adminRoutes = await fetch('/_forge/routes/admin').then(r => r.json());
 ```
 
+### Optional: embed the summary in the first page
+
+If your frontend HTML is server-rendered by Laravel (Blade), you can skip the first summary round-trip entirely. Drop `@forgeSummary` in the `<head>` (before your JS bundle) and it inlines the **summary endpoint's** payload as a one-time, self-deleting, non-enumerable `window.__ROUTE_FORGE__` accessor that `@route-forge/core` reads once at init:
+
+```blade
+<head>
+    {{-- ... --}}
+    @forgeSummary
+</head>
+```
+
+It is purely an accelerator layered on top of the endpoints:
+
+- Embeds **only the summary** — per-tier route tables still lazy-load over `GET /_forge/routes/{level}` (protected tiers never get inlined into public HTML).
+- Reuses the same producer/cache as the summary endpoint (byte-for-byte identical), adds **no new HTTP endpoint**, and does **not** bump `schemeVersion`.
+- Pure SPA / Vite-dev setups simply don't use the directive and fall back to the network summary — behavior unchanged.
+
+> The one-time self-deleting accessor only shrinks the data's runtime footprint on `window`; the summary is still visible in the HTML source. It is **not** an XSS- or sniffing-proof boundary — do not treat it as a security mechanism.
+
 ### Artisan commands
 
 ```bash

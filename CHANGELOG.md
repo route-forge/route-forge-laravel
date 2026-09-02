@@ -5,6 +5,20 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+
+- 首页内嵌摘要（Blade 指令 `@forgeSummary`，SPEC §3.1.8 / DESIGN §6.3）：面向「Laravel 服务端渲染 HTML、JS 只在浏览器执行」的首页，可选地把摘要内嵌进 `<head>`，让 `@route-forge/core` 跳过首屏的一次摘要 HTTP 往返
+  - 复用摘要端点**同一 producer**（`RouteRepository::getSummary()`）：字段契约、缓存（`cache_driver`/`cache_ttl`）、dev 旁路、包自身路由排除等既有语义全部继承，与 `GET {endpoint_prefix}` 响应逐字段一致
+  - 以**一次性、消费即自删、不可枚举**的 `window.__ROUTE_FORGE__` 访问器输出（`defineProperty` + 读后 `delete`）
+  - **只嵌摘要，绝不内嵌层级路由表**：各层级明细仍按 `GET {endpoint_prefix}/{level}` 走 HTTP 懒加载，受保护路由不预置进公开 HTML
+  - **XSS 安全编码**：经 `Illuminate\Support\Js`（`JSON_HEX_TAG` 等）转义，防 `</script>` 逃逸
+  - **不新增 HTTP 端点、不递增 `schemeVersion`**；纯 SPA / Vite dev 不书写指令即回落网络摘要，行为不变（向后兼容的纯增量）
+  - 新增 `src/Blade/ForgeSummaryRenderer.php`；`ForgeServiceProvider` 注册 `@forgeSummary` 指令
+  - 同步 SPEC §3.1.8、DESIGN §6.3（把"取消 Blade 注入"澄清为"取消把 Blade 当唯一通道"，本特性是端点之上的可选加速）、README（中英）、`llms.txt`、`.github/copilot-instructions.md`、`AGENTS.md`
+  - 新增测试 `tests/Feature/ForgeSummaryInjectionTest`：访问器结构、注入与摘要端点逐字段等值、`</script>` 转义、未用指令页不注入且端点无回归
+
 ## [1.3.0] - 2026-09-01
 
 ### Added

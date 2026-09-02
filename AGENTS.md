@@ -62,6 +62,7 @@ Aliases are injected as extra keys into the target route's level metadata (pure 
 - `GET /_forge/routes` → summary: tier list, global config, `schemeVersion`, unassigned info.
 - `GET /_forge/routes/{level}` → named-route metadata for that tier: `name`, `uri`, `method`, `params`.
 - The special level `unassigned` holds routes that matched no tier.
+- **Optional first-page embedding**: for Blade/SSR-rendered homepages, the `@forgeSummary` directive inlines the *summary* payload into `<head>` as a one-time self-deleting `window.__ROUTE_FORGE__` accessor so `@route-forge/core` skips the first summary round-trip. It embeds only the summary (per-tier tables still lazy-load over HTTP), reuses the same producer/cache, adds no endpoint, does not bump `schemeVersion`, and is a no-op for pure SPA / Vite dev (which fall back to the network summary). See [`.docs/SPEC.md` §3.1.8](./.docs/SPEC.md).
 
 ## Generating frontend types
 
@@ -90,7 +91,7 @@ Run it in the PHP/CI build stage — it reads the in-memory route registry, so i
 
 ## Editing this package (repo conventions)
 
-- Structure: `src/` (Http controllers/middleware, Console commands, Cache, Exceptions, `TierResolver`, `RouteRepository`, registrars, `ForgeServiceProvider`), `config/forge.php`, `resources/` (manager views), `tests/` (PHPUnit + orchestra/testbench), `.docs/` (SPEC + DESIGN as the single source of truth for the front/back contract).
+- Structure: `src/` (Http controllers/middleware, Console commands, Cache, Exceptions, `Blade/ForgeSummaryRenderer` for the `@forgeSummary` directive, `TierResolver`, `RouteRepository`, registrars, `ForgeServiceProvider`), `config/forge.php`, `resources/` (manager views), `tests/` (PHPUnit + orchestra/testbench), `.docs/` (SPEC + DESIGN as the single source of truth for the front/back contract), `_ide_helper.php` (manually-maintained macro stub — keep in sync when adding `Route` macros).
 - Tests: `composer test` (or `vendor/bin/phpunit`). Full suite must pass before any commit. New features/fixes ship with matching tests.
 - Commit messages: `type(scope): 中文描述` (type ∈ feat/fix/test/docs/refactor/chore). Do **not** push without explicit instruction.
 - Design decisions and the front/back contract are documented in [`.docs/DESIGN.md`](./.docs/DESIGN.md) and [`.docs/SPEC.md`](./.docs/SPEC.md) — consult them before proposing changes, and keep them in sync when behavior changes.

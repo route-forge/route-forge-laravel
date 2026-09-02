@@ -432,6 +432,47 @@ Route::get('/admin/members', [MemberController::class, 'index'])
 
 > 别名是**过渡手段**：改名稳定后应及时清理（`route:forge:list --aliases` 查看、grep `forgeAlias`），避免路由表长期新旧两套名字并存。`schemeVersion` 不因别名递增——routes 多出条目对既有前端无破坏，属向后兼容增量。
 
+#### 3.1.8 首页内嵌摘要（Blade 指令 `@forgeSummary`）
+
+对「Laravel 服务端渲染 HTML、JS 只在浏览器执行」的首页，可选地把**摘要端点的返回值**直接内嵌进 HTML，让 `@route-forge/core` 在浏览器初始化时读内嵌数据、**跳过首屏的一次摘要 HTTP 往返**。这是摘要端点之外的**可选投递方式**，不改变既有端点契约（DESIGN §6.3）。
+
+**用法**：在首页/布局的 `<head>` 内、早于前端 bundle 处书写指令：
+
+```blade
+<head>
+    {{-- ... --}}
+    @forgeSummary
+</head>
+```
+
+指令输出一段 `<script>`，以**一次性、消费即自删、不可枚举**的 `window` 访问器暴露摘要：
+
+```html
+<script>
+Object.defineProperty(window, '__ROUTE_FORGE__', {
+  configurable: true,
+  enumerable: false,
+  get: function () {
+    var v = JSON.parse('…');   // 摘要 JSON，经 Js::from 做 script-safe 转义
+    delete window.__ROUTE_FORGE__;
+    return v;
+  }
+});
+</script>
+```
+
+**契约与约束**：
+
++ 全局 key 固定为 `__ROUTE_FORGE__`（与前端消费实现对齐，勿单改）。
++ 内嵌值 = 与 `GET {endpoint_prefix}` 摘要端点响应**逐字段一致**的 JSON——由 `RouteRepository::getSummary()` **同一 producer** 产出，复用其缓存（`cache_driver` / `cache_ttl`）、dev 旁路、包自身路由排除等全部既有语义；**不新增 HTTP 端点**，摘要端点与层级端点原样保留。
++ **只嵌摘要，绝不内嵌层级路由表**：各层级明细仍按 `GET {endpoint_prefix}/{level}` 走 HTTP 懒加载（受保护层级的路由数据不得预置进公开 HTML，这是"懒加载 + 受保护"的产品定位）。
++ **XSS 安全编码**：内嵌 JSON 经 `Illuminate\Support\Js`（内部 `JSON_HEX_TAG` 等）转义，`</script>` 无法截断脚本块；禁止裸 `json_encode` 直拼。
++ **不递增 `schemeVersion`**：这是既有摘要契约的"投递方式"扩展，非协议变更。
++ **无 Blade 场景不受影响**：纯 SPA 独立部署 / Vite dev 不书写指令即不注入，前端自动回落网络摘要，行为不变。
++ 语义：前端读一次 → 拿到摘要、访问器自删、`window` 上不再残留该全局；`Object.keys(window)` / `JSON.stringify(window)` 扫不到。core 内部另有 module 级缓存兜住"同页多实例"，后端无需处理多实例。
+
+> **安全边界（如实说明）**：一次性自删只缩小数据在 `window` 上的**运行时驻留面**；摘要数据仍随 HTML 源码可见，非抗 XSS / 抗网络窃取的硬边界。XSS 一旦可在消费前执行脚本即可读取该值。文档与实现均不得将其夸称为加密或安全机制。
+
 #### 3.2 Artisan命令
 
 #### `php artisan route:forge:list`

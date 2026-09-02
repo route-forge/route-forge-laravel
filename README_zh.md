@@ -125,6 +125,25 @@ const summary = await fetch('/_forge/routes').then(r => r.json());
 const adminRoutes = await fetch('/_forge/routes/admin').then(r => r.json());
 ```
 
+### 可选：把摘要内嵌进首页
+
+如果你的前端 HTML 由 Laravel（Blade）服务端渲染，可以用 `@forgeSummary` 彻底省掉首屏那次摘要往返。把它放进 `<head>`（早于前端 bundle），它会以**一次性、消费即自删、不可枚举**的 `window.__ROUTE_FORGE__` 访问器把**摘要端点的返回值**内嵌进页面，`@route-forge/core` 初始化时读一次即可：
+
+```blade
+<head>
+    {{-- ... --}}
+    @forgeSummary
+</head>
+```
+
+它是叠加在既有端点之上的**纯加速**，不改变端点契约：
+
+- **只嵌摘要**——各层级明细仍按 `GET /_forge/routes/{level}` 走 HTTP 懒加载（受保护层级的路由数据不得预置进公开 HTML）。
+- 复用摘要端点的**同一 producer / 缓存**（逐字段一致）、**不新增 HTTP 端点**、**不递增 `schemeVersion`**。
+- 纯 SPA 独立部署 / Vite dev 不书写该指令即不注入，自动回落网络摘要，行为不变。
+
+> 一次性自删访问器只缩小数据在 `window` 上的运行时驻留面；摘要数据仍随 HTML 源码可见，**不是**抗 XSS / 抗网络窃取的硬边界，切勿当作安全机制。
+
 ### Artisan 命令
 
 ```bash
