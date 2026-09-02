@@ -16,8 +16,10 @@ use Illuminate\Routing\PendingSingletonResourceRegistration;
 use Illuminate\Routing\ResourceRegistrar;
 use Illuminate\Routing\Route;
 use Illuminate\Routing\Router as BaseRouter;
+use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Route as RouteFacade;
 use Illuminate\Support\ServiceProvider;
+use RouteForge\Laravel\Blade\ForgeSummaryRenderer;
 use RouteForge\Laravel\Cache\RouteCache;
 use RouteForge\Laravel\Console\RouteForgeClearCommand;
 use RouteForge\Laravel\Console\RouteForgeListCommand;
@@ -62,6 +64,7 @@ class ForgeServiceProvider extends ServiceProvider
         $this->registerTierMacro();
         $this->registerMetadataEndpoint();
         $this->registerViewNamespace();
+        $this->registerBladeDirective();
         $this->registerManagerRoutes();
         $this->publishConfig();
         $this->listenRouteClear();
@@ -332,6 +335,24 @@ class ForgeServiceProvider extends ServiceProvider
     protected function registerViewNamespace(): void
     {
         $this->loadViewsFrom(__DIR__ . '/../resources/views', 'forge');
+    }
+
+    /**
+     * 注册 @forgeSummary Blade 指令：在开发者首页/布局的 &lt;head&gt; 内
+     * （早于前端 bundle）内嵌一段 script，把「摘要端点」的返回值以一次性、
+     * 消费即自删、不可枚举的 window 访问器暴露给前端，使 @route-forge/core
+     * 跳过首屏的摘要 HTTP 往返。
+     *
+     * 仅「可选加速」：只有开发者主动书写 @forgeSummary 的 Blade 页面才产出脚本，
+     * 纯 SPA 独立部署 / Vite dev 场景不书写即不注入，前端自动回落网络摘要，行为不变。
+     * 摘要端点与层级端点原样保留（不新增 HTTP 端点）。详见 SPEC §3.1.8、DESIGN §6.3。
+     */
+    protected function registerBladeDirective(): void
+    {
+        Blade::directive(
+            'forgeSummary',
+            static fn (): string => "<?php echo app('" . ForgeSummaryRenderer::class . "')->render(); ?>"
+        );
     }
 
     /**
